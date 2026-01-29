@@ -2,17 +2,12 @@
 
 Launcher oficial de Leilos built con Tauri + React + TypeScript.
 
-## Screenshots
-
-[Tu launcher con diseño premium gold/luxury theme]
-
 ## Características
 
 - ✨ Diseño con tema dorado
 - 🔐 Autenticación con email/password
 - 🎮 Lanzamiento de Fortnite con argumentos personalizados
 - ⚙️ Configuración de rutas y URLs del backend
-- 🎨 UI moderna con animaciones y efectos glassmorphism
 
 ## Requisitos Previos
 
@@ -24,7 +19,7 @@ Launcher oficial de Leilos built con Tauri + React + TypeScript.
 
 1. Clona el repositorio:
 ```bash
-git clone https://github.com/LeilosFN/launcher.git
+git clone https://github.com/LeilosFN/launcher-v2.git
 cd leilos-launcher-beta
 ```
 
@@ -34,9 +29,8 @@ npm install
 ```
 
 3. Asegúrate de tener los DLLs necesarios en la carpeta `dlls/`:
+   - `Lelilos_Client.dll` - Unreal Engine patcher
    - `Tellurium.dll` - Para autenticación
-   - `LavishGS.dll` - Game server
-   - `LavishClient.dll` - Unreal Engine patcher
 
 ## Desarrollo
 
@@ -88,7 +82,7 @@ En la primera ejecución, deberás seleccionar la carpeta ROOT de tu instalació
 
 ### Error de autenticación
 - Verifica tus credenciales
-- Comprueba que el backend en `leilo.qzz.io:3551` esté accesible
+- Comprueba que el backend en `leilos.leilo.qzz.io:80` esté accesible
 
 ## Tecnologías Utilizadas
 
@@ -101,3 +95,4 @@ En la primera ejecución, deberás seleccionar la carpeta ROOT de tu instalació
 ## Licencia
 
 Al usar este codigo estas obligado a decir que yo lo he hecho eh :D
+
