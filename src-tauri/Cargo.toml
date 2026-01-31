@@ -2,9 +2,9 @@
 name = "leilos-launcher"
 version = "1.0.6"
 description = "Leilos Fortnite Launcher"
-authors = ["Leilos Team"]
-license = ""
-repository = ""
+authors = ["Leilos Team & Crisutf"]
+license = "MIT"
+repository = "https://github.com/LeilosFN/Launcher-v2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

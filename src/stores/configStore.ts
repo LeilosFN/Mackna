@@ -14,8 +14,8 @@ export const useConfigStore = create<ConfigState>()(
     persist(
         (set) => ({
             fortnitePath: '',
-            backendUrl: 'http://leilos.leilos.qzz.io:80',
-            hostUrl: 'http://leilos.leilos.qzz.io:7777',
+            backendUrl: 'http://79.116.51.74:80',
+            hostUrl: 'http://79.116.51.74:7777',
             setFortnitePath: (path) => set({ fortnitePath: path }),
             setBackendUrl: (url) => set({ backendUrl: url }),
             setHostUrl: (url) => set({ hostUrl: url }),
@@ -23,10 +23,10 @@ export const useConfigStore = create<ConfigState>()(
         {
             name: 'leilos-config',
             storage: createJSONStorage(() => localStorage),
-            version: 10, // Bumped version to force migration
+            version: 12, // Bumped version to force migration
             migrate: (persistedState: any) => {
-                persistedState.backendUrl = 'http://leilos.leilos.qzz.io:80';
-                persistedState.hostUrl = 'http://leilos.leilos.qzz.io:7777';
+                persistedState.backendUrl = 'http://79.116.51.74:80';
+                persistedState.hostUrl = 'http://79.116.51.74:7777';
                 return persistedState;
             },
         }

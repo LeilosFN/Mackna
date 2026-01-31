@@ -4,6 +4,7 @@ use std::fs;
 use std::thread;
 use std::time::Duration;
 use crate::process;
+use crate::downloader::download_file;
 use crate::injector::DllInjector;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde_json::Value;
@@ -86,6 +87,9 @@ pub async fn launch(
     host_url: String,
     manual_exchange_code: Option<String>,
 ) -> Result<bool, String> {
+    // FORCE IP FOR TESTING removed to respect configStore
+
+
     println!("Launching Fortnite...");
     println!("Path: {}", fortnite_path);
     println!("Backend: {}", backend_url);
@@ -113,28 +117,47 @@ pub async fn launch(
     ];
     let _ = process::kill_all(&processes_to_kill);
 
-    // 3. Copy DLLs
-    let dlls_source = window.app_handle().path_resolver().resolve_resource("dlls")
-        .ok_or("Failed to resolve dlls directory")?;
+    // 3. Download and Copy DLLs
+    // New logic: Download DLLs from CDN to AppData, then copy to Game Binaries
+    
+    // Define paths
+    let app_dir = window.app_handle().path_resolver().app_data_dir()
+        .ok_or("Failed to resolve app data directory")?;
+    let downloaded_dlls_dir = app_dir.join("dlls");
     let binaries_path = path.join("FortniteGame\\Binaries\\Win64");
 
-    // Copy DLLs
-    let entries = fs::read_dir(&dlls_source)
-        .map_err(|e| format!("Failed to read DLLs directory: {}", e))?;
+    // Create directories if not exist
+    if !downloaded_dlls_dir.exists() {
+        fs::create_dir_all(&downloaded_dlls_dir).map_err(|e| format!("Failed to create DLL download dir: {}", e))?;
+    }
 
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
-        let path = entry.path();
+    // List of DLLs to download
+    let dlls_to_download = [
+        ("Leilos_Tellurium.dll", "https://cdn.leilos.qzz.io/download/dlls/Leilos_Tellurium.dll"),
+        ("Leilos_Client.dll", "https://cdn.leilos.qzz.io/download/dlls/Leilos_Client.dll"),
+    ];
+
+    println!("Downloading DLLs from CDN...");
+    for (name, url) in dlls_to_download.iter() {
+        let dest_path = downloaded_dlls_dir.join(name);
+        println!("Downloading {}...", name);
         
-        if path.is_file() {
-            if let Some(file_name) = path.file_name() {
-                let dest = binaries_path.join(file_name);
-                if let Err(e) = fs::copy(&path, &dest) {
-                    println!("Warning: Failed to copy {:?} to {:?}: {}", path, dest, e);
-                } else {
-                    println!("Copied {:?} to {:?}", path, dest);
-                }
-            }
+        // Try download, log error but continue (maybe using cached version)
+        match download_file(url, &dest_path).await {
+            Ok(_) => println!("Downloaded {}", name),
+            Err(e) => println!("Warning: Failed to download {}: {}. Using cached version if available.", name, e),
+        }
+        
+        // Copy to Game Binaries
+        if dest_path.exists() {
+             let game_dest = binaries_path.join(name);
+             if let Err(e) = fs::copy(&dest_path, &game_dest) {
+                 println!("Warning: Failed to copy {:?} to {:?}: {}", dest_path, game_dest, e);
+             } else {
+                 println!("Copied {:?} to {:?}", dest_path, game_dest);
+             }
+        } else {
+             println!("Error: DLL {} not found after download attempt.", name);
         }
     }
 
@@ -191,6 +214,9 @@ pub async fn launch(
     ];
 
     println!("Launching with args: {:?}", args);
+    let args_str = args.join(" ");
+    println!("Full Command Line (Copy/Paste to test): \"{}\" {}", exe_path.display(), args_str);
+
     match process::start_with_args(exe_path, args) {
         Ok(pid) => {
             println!("Game launched successfully! PID: {}", pid);
@@ -210,14 +236,13 @@ pub async fn launch(
             
             // Define DLLs to inject in order
             // Map generic names to likely existing files if specific names are not found
-            // ORDER MATTERS: Auth -> GS -> Client
+            // ORDER MATTERS: Tellurium (Auth/Core) -> Client
             let dll_candidates = [
-                ("Tellurium.dll", "Leilos_Autenticator.dll"),
-                ("LavishGS.dll", "Leilos_GS.dll"),
-                ("LavishClient.dll", "Leilos_Client.dll"),
+                ("Leilos_Tellurium.dll", "Leilos_Tellurium.dll"),
+                ("Leilos_Client.dll", "Leilos_Client.dll"),
             ];
 
-            // Check for Server Mode keys (Ctrl + Shift + Alt)
+            // Check for Server Mode keys (Ctrl + Shift + Alt) - Logic kept but currently unused for injection list
             let server_mode = unsafe {
                 let ctrl = GetAsyncKeyState(VK_CONTROL) as u16;
                 let shift = GetAsyncKeyState(VK_SHIFT) as u16;
@@ -226,17 +251,10 @@ pub async fn launch(
             };
 
             if server_mode {
-                println!("Server Mode Detected (Ctrl+Shift+Alt): LavishGS.dll will be injected.");
-            } else {
-                println!("Client Mode: Skipping LavishGS.dll (Hold Ctrl+Shift+Alt to enable).");
+                println!("Server Mode Detected (Ctrl+Shift+Alt): Server features enabled.");
             }
 
             for (target_name, fallback_name) in dll_candidates.iter() {
-                // Conditional Injection for LavishGS.dll (Game Server)
-                if target_name == &"LavishGS.dll" && !server_mode {
-                    println!("Skipping {} because Server Mode is not active.", target_name);
-                    continue;
-                }
 
                 let mut dll_path = binaries_path.join(target_name);
                 if !dll_path.exists() {

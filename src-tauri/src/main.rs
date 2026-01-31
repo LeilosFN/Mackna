@@ -10,7 +10,7 @@ mod injector;
 
 #[tauri::command]
 async fn install_game(window: Window, install_path: String) -> Result<(), String> {
-    let url = "http://leilos.leilos.qzz.io:4080/28.30.7z".to_string();
+    let url = "http://79.116.51.74:4080/28.30.7z".to_string();
     downloader::download_and_install(window, url, install_path).await
 }
 

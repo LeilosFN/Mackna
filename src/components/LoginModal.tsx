@@ -41,7 +41,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                             value={localEmail}
                             onChange={(e) => setLocalEmail(e.target.value)}
                             className="input-field"
-                            placeholder="agente@leilos.qzz.io"
+                            placeholder="usuario@email.com"
                             autoFocus
                         />
                     </div>

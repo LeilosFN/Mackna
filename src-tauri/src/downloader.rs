@@ -78,3 +78,31 @@ pub async fn download_and_install(
 
     Ok(())
 }
+
+pub async fn download_file(
+    url: &str,
+    dest_path: &Path,
+) -> Result<(), String> {
+    if let Some(parent) = dest_path.parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+    }
+
+    let client = reqwest::Client::new();
+    let res = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to connect to {}: {}", url, e))?;
+
+    if !res.status().is_success() {
+        return Err(format!("Failed to download {}: Status {}", url, res.status()));
+    }
+
+    let content = res.bytes().await.map_err(|e| format!("Failed to read bytes: {}", e))?;
+    let mut file = File::create(dest_path).map_err(|e| format!("Failed to create file: {}", e))?;
+    file.write_all(&content).map_err(|e| format!("Failed to write to file: {}", e))?;
+
+    Ok(())
+}

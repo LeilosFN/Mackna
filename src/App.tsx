@@ -20,21 +20,43 @@ interface DownloadState {
 
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState('home');
-    const [appVersion, setAppVersion] = useState<string>('1.0.6');
+    const [appVersion, setAppVersion] = useState<string>('1.0.9');
     const [isLoginOpen, setIsLoginOpen] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState<DownloadState | null>(null);
     const [serverData, setServerData] = useState<{ status: boolean; news?: { title: string; content: string; date: string } } | null>(null);
+    const [isOutdated, setIsOutdated] = useState(false);
     
     const { email, _hasHydrated } = useUserStore();
     const { fortnitePath, setFortnitePath } = useConfigStore();
 
+    const compareVersions = (v1: string, v2: string) => {
+        const p1 = v1.split('.').map(Number);
+        const p2 = v2.split('.').map(Number);
+        for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+            const n1 = p1[i] || 0;
+            const n2 = p2[i] || 0;
+            if (n1 > n2) return 1;
+            if (n1 < n2) return -1;
+        }
+        return 0;
+    };
+
     useEffect(() => {
         const fetchData = async () => {
             try {
+                const currentVersion = await getVersion();
+                setAppVersion(currentVersion);
+
                 // Fetch status
                 const statusRes = await fetch('https://cdn.leilos.qzz.io/json/status.json');
                 const statusJson = await statusRes.json();
                 
+                // Check version
+                if (statusJson.version && compareVersions(statusJson.version, currentVersion) > 0) {
+                    setIsOutdated(true);
+                    return; // Stop loading if outdated
+                }
+
                 // Fetch news (try status.json first, then news.json)
                 let newsData = statusJson.news;
                 if (!newsData) {
@@ -63,7 +85,7 @@ const App: React.FC = () => {
         };
 
         fetchData();
-        getVersion().then(setAppVersion).catch(() => {});
+        // getVersion().then(setAppVersion).catch(() => {}); // Moved inside fetchData to sync with version check
 
         const { setStatus } = useGameStore.getState();
         
@@ -354,6 +376,27 @@ const App: React.FC = () => {
                 return <div>View not found</div>;
         }
     };
+
+    if (isOutdated) {
+        return (
+            <div className="flex h-screen w-screen items-center justify-center bg-black text-white p-10">
+                <div className="text-center space-y-6 max-w-lg border border-gold/30 p-10 rounded-xl bg-black/90 backdrop-blur">
+                    <h1 className="text-3xl font-bold text-gold font-orbitron">ACTUALIZACIÓN REQUERIDA</h1>
+                    <p className="text-gray-300 font-rajdhani text-lg">
+                        Tu versión del launcher ({appVersion}) está obsoleta.
+                        <br/>
+                        Por favor, descarga la última versión para continuar.
+                    </p>
+                    <button 
+                        onClick={() => open('https://cdn.leilos.qzz.io/download/Leilos_Launcher.exe')}
+                        className="px-8 py-3 bg-gold text-black font-bold rounded hover:bg-yellow-500 transition-colors w-full font-orbitron"
+                    >
+                        DESCARGAR AHORA
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <Layout currentView={currentView} onChangeView={setCurrentView}>

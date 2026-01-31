@@ -7,7 +7,7 @@
     },
     "package": {
         "productName": "Leilos Launcher",
-        "version": "1.0.6"
+        "version": "1.0.9"
     },
     "tauri": {
         "allowlist": {
@@ -25,7 +25,9 @@
                     "https://cdn.leilos.qzz.io/*",
                     "http://leilos.leilos.qzz.io/*",
                     "http://leilos.leilos.qzz.io:4080/*",
-                    "http://leilos.leilos.qzz.io:7777/*"
+                    "http://leilos.leilos.qzz.io:7777/*",
+                    "http://79.116.51.74:80/*",
+                    "http://79.116.51.74:7777/*"
                 ]
             },
             "fs": {
@@ -39,7 +41,7 @@
             {
                 "fullscreen": false,
                 "maximizable": false,
-                "resizable": true,
+                "resizable": false,
                 "title": "Leilos Launcher",
                 "decorations": false,
                 "center": true,
