@@ -30,7 +30,7 @@ npm install
 
 3. Asegúrate de tener los DLLs necesarios en la carpeta `dlls/`:
    - `Lelilos_Client.dll` - Unreal Engine patcher
-   - `Tellurium.dll` - Para autenticación (Gracias a @plooshi)
+   - `Leilos_Autenticator.dll` - Para autenticación (Gracias a @plooshi)
 
 ## Desarrollo
 
@@ -95,5 +95,6 @@ En la primera ejecución, deberás seleccionar la carpeta ROOT de tu instalació
 ## Licencia
 
 Al usar este codigo estas obligado a decir que yo lo he hecho eh :D
+
 
 
