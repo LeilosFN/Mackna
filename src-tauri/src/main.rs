@@ -144,6 +144,11 @@ async fn select_folder() -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn check_file_exists(path: String) -> bool {
+    std::path::Path::new(&path).exists()
+}
+
+#[tauri::command]
 async fn launch_game(
     window: Window,
     fortnite_path: String,
@@ -152,6 +157,9 @@ async fn launch_game(
     backend_url: String,
     host_url: String,
     manual_exchange_code: Option<String>,
+    redirect_dll: String,
+    console_dll: String,
+    game_server_dll: String,
 ) -> Result<bool, String> {
     launcher::launch(
         window,
@@ -161,12 +169,15 @@ async fn launch_game(
         backend_url,
         host_url,
         manual_exchange_code,
+        redirect_dll,
+        console_dll,
+        game_server_dll,
     ).await
 }
 
 #[tauri::command]
-async fn kill_fortnite() -> Result<bool, String> {
-    launcher::kill_fortnite_processes().await
+async fn kill_fortnite(window: Window) -> Result<bool, String> {
+    launcher::kill_fortnite_processes(window).await
 }
 
 fn main() {
@@ -192,7 +203,8 @@ fn main() {
             launcher::check_is_game_running,
             start_rpc,
             stop_rpc,
-            clear_rpc
+            clear_rpc,
+            check_file_exists
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

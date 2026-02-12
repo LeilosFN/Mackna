@@ -24,7 +24,7 @@ tokio = { version = "1", features = ["full"] }
 futures-util = "0.3"
 window-shadows = "0.2"
 rfd = "0.10"
-winapi = { version = "0.3", features = ["processthreadsapi", "winbase", "handleapi", "errhandlingapi", "synchapi", "winuser", "psapi", "memoryapi", "libloaderapi", "winnt"] }
+winapi = { version = "0.3", features = ["processthreadsapi", "winbase", "handleapi", "errhandlingapi", "synchapi", "winuser", "psapi", "memoryapi", "libloaderapi", "winnt", "shellapi"] }
 widestring = "1.0"
 sysinfo = "0.29"
 discord-rich-presence = "0.2.4"

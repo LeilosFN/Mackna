@@ -12,6 +12,8 @@ pub struct SuspendedProcess {
     pub thread_handle: Option<winapi::um::winnt::HANDLE>,
 }
 
+unsafe impl Send for SuspendedProcess {}
+
 impl SuspendedProcess {
     pub fn resume(&self) -> Result<(), String> {
         if let Some(handle) = self.thread_handle {
@@ -124,8 +126,8 @@ pub fn start_suspended_with_args(process_path: PathBuf, args: Vec<String>) -> Re
 
 pub fn start_with_args(process_path: PathBuf, args: Vec<String>) -> Result<u32, String> {
     let args_str = args.join(" ");
-    // Match GitHub version behavior: Use CreateProcessW with CREATE_NO_WINDOW instead of Command::spawn
-    let info = start_internal(process_path, false, Some(args_str), true)?;
+    // Allow window for the game process (no_window = false)
+    let info = start_internal(process_path, false, Some(args_str), false)?;
     unsafe {
         CloseHandle(info.hProcess);
         CloseHandle(info.hThread);

@@ -1,22 +1,34 @@
 use tauri::{Window, Manager};
 use std::path::PathBuf;
-use std::fs;
-use std::thread;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::time::Duration;
 use crate::process;
 use crate::injector::DllInjector;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde_json::Value;
 use winapi::um::winuser::{GetAsyncKeyState, VK_CONTROL, VK_SHIFT, VK_MENU};
+use winapi::um::processthreadsapi::OpenProcess;
+use winapi::um::synchapi::WaitForSingleObject;
+use winapi::um::handleapi::CloseHandle;
+use winapi::um::winbase::INFINITE;
+use winapi::um::winnt::SYNCHRONIZE;
+use std::os::windows::process::CommandExt;
+
+fn log_to_file(message: &str) {
+    println!("{}", message);
+    let mut log_path = std::env::temp_dir();
+    log_path.push("leilos_launcher_debug.log");
+    
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(log_path) {
+        let _ = writeln!(file, "{}", message);
+    }
+}
 
 async fn get_exchange_code(email: &str, password: &str, backend_url: &str) -> Result<String, String> {
-    // Ensure backend_url doesn't have trailing slash for consistency
     let base_url = backend_url.trim_end_matches('/');
     let client = reqwest::Client::new();
 
-    // 1. OAuth Token Request
-    // Use the Fortnite Launcher Client ID (publicly known)
-    // Authorization: basic MzQ0NmNkNzI2OTRjNGE0NDg1ZDgxYjc3YWRiYjIxNDE6OTIwOWQ0YTVlMjVhNDU3YTliMDcxMzhjYjcyNzYzMDQ=
     let token_url = format!("{}/account/api/oauth/token", base_url);
     let auth_header = "basic MzQ0NmNkNzI2OTRjNGE0NDg1ZDgxYjc3YWRiYjIxNDE6OTIwOWQ0YTVlMjVhNDU3YTliMDcxMzhjYjcyNzYzMDQ=";
 
@@ -50,10 +62,12 @@ async fn get_exchange_code(email: &str, password: &str, backend_url: &str) -> Re
     let access_token = token_data["access_token"].as_str()
         .ok_or("No access_token in response")?;
 
-    // 2. Exchange Code Request
     let exchange_url = format!("{}/account/api/oauth/exchange", base_url);
     let mut exchange_headers = HeaderMap::new();
-    exchange_headers.insert(AUTHORIZATION, HeaderValue::from_str(&format!("bearer {}", access_token)).unwrap());
+    
+    let auth_val = HeaderValue::from_str(&format!("bearer {}", access_token))
+        .map_err(|e| format!("Invalid access token format: {}", e))?;
+    exchange_headers.insert(AUTHORIZATION, auth_val);
 
     let exchange_res = client.get(&exchange_url)
         .headers(exchange_headers)
@@ -85,26 +99,23 @@ pub async fn launch(
     backend_url: String,
     host_url: String,
     manual_exchange_code: Option<String>,
+    redirect_dll: String,
+    console_dll: String,
+    game_server_dll: String,
 ) -> Result<bool, String> {
-    // FORCE IP FOR TESTING removed to respect configStore
-
-
-    println!("Launching Fortnite...");
-    println!("Path: {}", fortnite_path);
-    println!("Backend: {}", backend_url);
-    println!("Host: {}", host_url);
-
+    log_to_file("Launching Fortnite...");
+    log_to_file(&format!("Path: {}", fortnite_path));
+    log_to_file(&format!("Backend: {}", backend_url));
+    
     // 1. Verify Path
     let path = PathBuf::from(&fortnite_path);
     let exe_path = path.join("FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe");
-    let launcher_path = path.join("FortniteGame\\Binaries\\Win64\\FortniteLauncher.exe");
-    let eac_path = path.join("FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping_EAC.exe");
-
+    
     if !exe_path.exists() {
         return Err(format!("Fortnite executable not found at {:?}", exe_path));
     }
 
-    // 2. Kill Existing Processes (Retrac style)
+    // 2. Kill Existing Processes
     let processes_to_kill = [
         "FortniteClient-Win64-Shipping_BE.exe",
         "FortniteClient-Win64-Shipping_EAC.exe",
@@ -117,66 +128,100 @@ pub async fn launch(
     ];
     let _ = process::kill_all(&processes_to_kill);
 
-    // 3. Copy DLLs (Ported from v1 to fix crash issues)
-    // We use local bundled DLLs instead of downloading from CDN
-    let dlls_source = window.app_handle().path_resolver().resolve_resource("dlls")
-        .ok_or("Failed to resolve dlls directory")?;
+    // 3. Prepare Bundled DLLs
+    // The DLLs should be located in the launcher executable directory or a 'dlls' subfolder
     let binaries_path = path.join("FortniteGame\\Binaries\\Win64");
+    
+    // Get the directory where the launcher executable is running
+    let current_exe = std::env::current_exe().map_err(|e| format!("Failed to get current exe path: {}", e))?;
+    let exe_dir = current_exe.parent().ok_or("Failed to get exe directory")?;
+    
+    // Priority 1: Check root folder (where .exe is)
+    // Priority 2: Check 'dlls' subfolder
+    let mut dll_source_path = None;
+    
+    let root_dll = exe_dir.join("leilos.dll");
+    let subfolder_dll = exe_dir.join("dlls").join("leilos.dll");
+    
+    if root_dll.exists() {
+        log_to_file(&format!("Found DLLs in root: {:?}", exe_dir));
+        dll_source_path = Some(exe_dir.to_path_buf());
+    } else if subfolder_dll.exists() {
+        log_to_file(&format!("Found DLLs in 'dlls' subfolder: {:?}", exe_dir.join("dlls")));
+        dll_source_path = Some(exe_dir.join("dlls"));
+    } else {
+        log_to_file("Warning: DLLs not found in root or 'dlls' subfolder. Checking fallback...");
+        // Fallback: Check CWD 'dlls'
+        let cwd_dlls = std::env::current_dir().unwrap_or_default().join("dlls");
+        if cwd_dlls.exists() {
+             dll_source_path = Some(cwd_dlls);
+        }
+    }
 
-    // Copy DLLs
-    let entries = fs::read_dir(&dlls_source)
-        .map_err(|e| format!("Failed to read DLLs directory: {}", e))?;
-
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
-        let path = entry.path();
+    if let Some(source) = dll_source_path {
+        // List of specific DLLs we care about
+        let required_dlls = ["leilos.dll", "Leilos_Client.dll", "Leilos_GS.dll"];
         
-        if path.is_file() {
-            if let Some(file_name) = path.file_name() {
+        for file_name in required_dlls.iter() {
+            let source_file = source.join(file_name);
+            if source_file.exists() {
                 let dest = binaries_path.join(file_name);
-                if let Err(e) = fs::copy(&path, &dest) {
-                    println!("Warning: Failed to copy {:?} to {:?}: {}", path, dest, e);
+                if let Err(e) = fs::copy(&source_file, &dest) {
+                    log_to_file(&format!("Failed to copy DLL {:?}: {}", file_name, e));
                 } else {
-                    println!("Copied {:?} to {:?}", path, dest);
+                    log_to_file(&format!("Copied DLL: {:?}", file_name));
                 }
+            } else {
+                 log_to_file(&format!("Warning: DLL {:?} not found in source {:?}", file_name, source));
             }
         }
+    } else {
+         log_to_file("Error: Could not locate DLL source directory.");
     }
 
-    // 3.5. Specific Copy for Injection REMOVED in favor of LoadLibraryA injection
-    // Old logic removed to comply with new requirements.
-
-    // 4. Start Suspended Processes (EAC Bypass)
-    println!("Starting suspended processes...");
-    if launcher_path.exists() {
-        // Ignore errors if they fail to start, but log it
-        if let Err(e) = process::start_suspended(launcher_path.clone()) {
-            println!("Warning: Failed to start suspended launcher: {}", e);
-        }
-    }
-    if eac_path.exists() {
-        if let Err(e) = process::start_suspended(eac_path.clone()) {
-             println!("Warning: Failed to start suspended EAC: {}", e);
-        }
-    }
-
-    // 5. Authenticate and Get Exchange Code
+    // 4. Authenticate
     let exchange_code = if let Some(code) = manual_exchange_code.filter(|c| !c.trim().is_empty()) {
         let trimmed_code = code.trim().to_string();
-        println!("Using manual exchange code: {}", trimmed_code);
+        log_to_file(&format!("Using manual exchange code: {}", trimmed_code));
         trimmed_code
     } else {
-        println!("Authenticating...");
+        log_to_file("Authenticating...");
         match get_exchange_code(&email, &password, &backend_url).await {
             Ok(code) => {
-                println!("Got exchange code: {}", code);
+                log_to_file("Got exchange code");
                 code
             },
             Err(e) => return Err(format!("Authentication failed: {}", e)),
         }
     };
 
-    // 6. Launch Game with Retrac Arguments
+    // 5. Pre-Launch Cleanup & Fake Processes
+    // Delete GFSDK_Aftermath_Lib.x64.dll (Anti-Cheat / Crash Fix - used by Reboot/Erbium)
+    let binaries_path_launch = path.join("FortniteGame\\Binaries\\Win64");
+    let aftermath_dll = binaries_path_launch.join("GFSDK_Aftermath_Lib.x64.dll");
+    if aftermath_dll.exists() {
+        log_to_file(&format!("Deleting potential conflict DLL: {:?}", aftermath_dll));
+        let _ = fs::remove_file(&aftermath_dll);
+    }
+
+    // Spawn Fake Processes (Suspended + No Window) to satisfy Anti-Cheat checks
+    // This mimics Reboot Launcher and Erbium behavior to prevent "peta" (crashes)
+    let fn_launcher_path = binaries_path_launch.join("FortniteLauncher.exe");
+    let fn_eac_path = binaries_path_launch.join("FortniteClient-Win64-Shipping_EAC.exe");
+    let fn_be_path = binaries_path_launch.join("FortniteClient-Win64-Shipping_BE.exe");
+
+    log_to_file("Spawning fake background processes...");
+    if fn_launcher_path.exists() {
+        let _ = process::start_suspended(fn_launcher_path);
+    }
+    if fn_eac_path.exists() {
+        let _ = process::start_suspended(fn_eac_path);
+    }
+    if fn_be_path.exists() {
+         let _ = process::start_suspended(fn_be_path);
+    }
+
+    // 6. Launch Game
     let args = vec![
         "-epicapp=Fortnite".to_string(),
         "-epicenv=Prod".to_string(),
@@ -195,37 +240,19 @@ pub async fn launch(
         format!("-host={}", host_url),
     ];
 
-    println!("Launching with args: {:?}", args);
-    let args_str = args.join(" ");
-    println!("Full Command Line (Copy/Paste to test): \"{}\" {}", exe_path.display(), args_str);
-
+    log_to_file("Starting game process...");
+    
     // Revert to start_with_args (Normal Launch)
     // Suspended launch causes immediate crash with these specific DLLs/Game version.
     // We use Normal Launch with a minimal delay to satisfy "al instante" request while maintaining stability.
     match process::start_with_args(exe_path, args) {
         Ok(pid) => {
-            println!("Game launched successfully! PID: {}", pid);
-
-            // Minimize the launcher window
+            log_to_file(&format!("Game launched! PID: {}", pid));
             let _ = window.minimize();
-
-            // Short delay to allow process initialization (avoid "petaba cargando")
-            // Reverted to 15s to guarantee stability (matches GitHub version)
-            println!("Waiting for process to initialize (15s)...");
-            tokio::time::sleep(Duration::from_millis(15000)).await;
 
             // 7. Inject DLLs
             let injector = DllInjector::new();
             let binaries_path = path.join("FortniteGame\\Binaries\\Win64");
-            
-            // Define DLLs to inject in order (Ported from v1)
-            // Map generic names to likely existing files if specific names are not found
-            // ORDER MATTERS: Tellurium (Auth/Core) -> Client
-            let dll_candidates = [
-                ("Tellurium.dll", "Leilos_Autenticator.dll"),
-                ("LavishGS.dll", "Leilos_GS.dll"),
-                ("LavishClient.dll", "Leilos_Client.dll"),
-            ];
 
             // Check for Server Mode keys (Ctrl + Shift + Alt)
             let server_mode = unsafe {
@@ -236,45 +263,109 @@ pub async fn launch(
             };
 
             if server_mode {
-                println!("Server Mode Detected (Ctrl+Shift+Alt): Server features enabled.");
+                log_to_file("Server Mode Detected (Ctrl+Shift+Alt): Server features enabled.");
             } else {
-                println!("Client Mode: Skipping LavishGS.dll (Hold Ctrl+Shift+Alt to enable).");
+                log_to_file("Client Mode: Skipping Leilos_GS.dll (Hold Ctrl+Shift+Alt to enable).");
             }
 
+            // PHASE 1: IMMEDIATE INJECTION (Auth)
+            // Reboot Launcher strategy: Inject Auth/Core DLL immediately after process start.
+            let auth_dll_name = "leilos.dll";
+            let mut auth_dll_path = if !redirect_dll.is_empty() {
+                PathBuf::from(redirect_dll.clone())
+            } else {
+                binaries_path.join(auth_dll_name)
+            };
+
+            if !auth_dll_path.exists() {
+                 // Try fallback/alternative name just in case
+                 auth_dll_path = binaries_path.join("Tellurium.dll");
+            }
+
+            if auth_dll_path.exists() {
+                 log_to_file(&format!("Injecting Auth DLL (Immediate): {:?}", auth_dll_path));
+                 if let Some(p) = auth_dll_path.to_str() {
+                     let _ = injector.inject(pid, p);
+                 }
+            } else {
+                 log_to_file("Warning: Auth DLL not found for immediate injection!");
+            }
+
+            // PHASE 2: DELAYED INJECTION (Client / Server)
+            // Wait for game to initialize before injecting Client/Console/Server DLLs.
+            // Reduced to 4 seconds (from 15s) to fix "Abre pasa 2 Segundos" crash/timeout issues.
+            // This aligns better with the "Hybrid" strategy (Immediate Auth -> Short Delay -> Client).
+            log_to_file("Waiting for process to initialize (4s)...");
+            tokio::time::sleep(Duration::from_millis(4000)).await;
+            
+            // Define remaining DLLs to inject
+            let dll_candidates = [
+                ("Leilos_GS.dll", "Leilos_GS.dll"),
+                ("Leilos_Client.dll", "Leilos_Client.dll"),
+            ];
+
             for (target_name, fallback_name) in dll_candidates.iter() {
-                // Conditional Injection for LavishGS.dll (Game Server)
-                if target_name == &"LavishGS.dll" && !server_mode {
-                    println!("Skipping {} because Server Mode is not active.", target_name);
+                // Conditional Injection for Leilos_GS.dll (Game Server)
+                if target_name == &"Leilos_GS.dll" && !server_mode {
                     continue;
                 }
 
-                let mut dll_path = binaries_path.join(target_name);
+                // Check for custom DLLs first if provided
+                let mut dll_path = if target_name == &"Leilos_Client.dll" && !console_dll.is_empty() {
+                    PathBuf::from(console_dll.clone())
+                } else if target_name == &"Leilos_GS.dll" && !game_server_dll.is_empty() {
+                    PathBuf::from(game_server_dll.clone())
+                } else {
+                    binaries_path.join(target_name)
+                };
+
+                // Fallback to default names if not found
                 if !dll_path.exists() {
                     dll_path = binaries_path.join(fallback_name);
                 }
 
                 if dll_path.exists() {
-                     let abs_path = fs::canonicalize(&dll_path).unwrap_or(dll_path.clone());
-                     let abs_path_str = match abs_path.to_str() {
-                         Some(s) => s,
-                         None => {
-                             println!("Warning: Invalid path string for {:?}", abs_path);
-                             continue;
-                         }
-                     };
-                     
-                     println!("Injecting DLL: {:?}", abs_path_str);
-                     match injector.inject(pid, abs_path_str) {
-                         Ok(_) => println!("Successfully injected {}", abs_path_str),
-                         Err(e) => println!("Failed to inject {}: {}", abs_path_str, e),
+                     log_to_file(&format!("Injecting DLL: {:?}", dll_path));
+                     if let Some(p) = dll_path.to_str() {
+                         let _ = injector.inject(pid, p);
                      }
+                     // Small delay between injections just to be safe
+                     tokio::time::sleep(Duration::from_millis(500)).await;
                 } else {
-                    println!("Warning: DLL not found: {} (or {})", target_name, fallback_name);
+                     log_to_file(&format!("Warning: DLL not found: {:?}", target_name));
                 }
-                
-                // Increased delay between injections to prevent race conditions (match github version)
-                tokio::time::sleep(Duration::from_millis(500)).await;
             }
+
+            // Start Process Monitor for Cleanup
+            let cleanup_path = binaries_path.clone();
+            let pid_clone = pid;
+            
+            tokio::spawn(async move {
+                log_to_file(&format!("Starting monitor for PID: {}", pid_clone));
+                unsafe {
+                    let h_process = OpenProcess(SYNCHRONIZE, 0, pid_clone);
+                    if !h_process.is_null() {
+                        WaitForSingleObject(h_process, INFINITE);
+                        CloseHandle(h_process);
+                        
+                        // Process has exited, perform cleanup
+                        log_to_file("Game process exited. Cleaning up leilos.dll...");
+                        let auth_dll = cleanup_path.join("leilos.dll");
+                        if auth_dll.exists() {
+                            // Retry loop in case file is still locked briefly
+                            for _ in 0..5 {
+                                if fs::remove_file(&auth_dll).is_ok() {
+                                    log_to_file("Successfully deleted leilos.dll");
+                                    break;
+                                }
+                                tokio::time::sleep(Duration::from_millis(500)).await;
+                            }
+                        }
+                    } else {
+                        log_to_file("Failed to open process handle for monitoring.");
+                    }
+                }
+            });
 
             Ok(true)
         }
@@ -283,7 +374,7 @@ pub async fn launch(
 }
 
 #[tauri::command]
-pub async fn kill_fortnite_processes() -> Result<bool, String> {
+pub async fn kill_fortnite_processes(window: Window) -> Result<bool, String> {
     let processes_to_kill = [
         "FortniteClient-Win64-Shipping_BE.exe",
         "FortniteClient-Win64-Shipping_EAC.exe",
@@ -294,13 +385,41 @@ pub async fn kill_fortnite_processes() -> Result<bool, String> {
         "UnrealCEFSubProcess.exe",
         "CrashReportClient.exe",
     ];
-    process::kill_all(&processes_to_kill).map_err(|e| e.to_string())?;
+    let _ = process::kill_all(&processes_to_kill);
+
+    // Try to resolve the resource path first (production mode)
+    let resource_path = window.app_handle().path_resolver().resolve_resource("cmd/kill.bat");
+    
+    // Fallback to absolute dev path if resource resolution fails
+    let dev_path = PathBuf::from(r"c:\Users\Crisu\Desktop\Leilos\LEILOS_REBUILD_STATUS_TRUE\launcher-v2-main\src-tauri\cmd\kill.bat");
+    
+    let bat_path_buf = if let Some(path) = resource_path {
+        if path.exists() {
+            path
+        } else {
+            dev_path
+        }
+    } else {
+        dev_path
+    };
+
+    if bat_path_buf.exists() {
+        log_to_file(&format!("Executing kill script: {:?}", bat_path_buf));
+        std::process::Command::new("cmd")
+            .args(&["/C", bat_path_buf.to_str().unwrap()])
+            .creation_flags(0x08000000) 
+            .spawn()
+            .map_err(|e| format!("Failed to execute kill script: {}", e))?;
+    } else {
+        log_to_file("Warning: kill.bat not found in resources or dev path");
+        return Err("kill.bat not found".to_string());
+    }
+        
     Ok(true)
 }
 
 #[tauri::command]
 pub async fn check_is_game_running() -> Result<bool, String> {
-    // Check if the main game process is running using sysinfo to avoid CMD window flashing
     use sysinfo::{System, SystemExt, ProcessExt};
     
     let mut system = System::new();

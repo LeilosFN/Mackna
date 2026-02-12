@@ -1,13 +1,13 @@
 {
     "build": {
-        "beforeDevCommand": "npm run dev:react",
-        "beforeBuildCommand": "npm run build",
+        "beforeDevCommand": "bun run dev:react",
+        "beforeBuildCommand": "bun run build",
         "devPath": "../dist",
         "distDir": "../dist"
     },
     "package": {
         "productName": "Leilos Launcher",
-        "version": "1.0.9"
+        "version": "1.1.1"
     },
     "tauri": {
         "allowlist": {
@@ -64,7 +64,8 @@
                 "icons/icon.ico"
             ],
             "resources": [
-                "dlls"
+                "dlls",
+                "cmd"
             ],
             "windows": {
                 "certificateThumbprint": null,
