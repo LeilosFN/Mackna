@@ -14,7 +14,7 @@ const LaunchButton: React.FC<LaunchButtonProps> = ({ onStatusChange }) => {
     const [manualCode, setManualCode] = useState('');
     const [showInput, setShowInput] = useState(false);
     const { email, password } = useUserStore();
-    const { fortnitePath, backendUrl, hostUrl } = useConfigStore();
+    const { fortnitePath, backendUrl, hostUrl, redirectDLL, consoleDLL } = useConfigStore();
 
     const updateStatus = (newStatus: LaunchStatus) => {
         setStatus(newStatus);
@@ -23,13 +23,20 @@ const LaunchButton: React.FC<LaunchButtonProps> = ({ onStatusChange }) => {
 
     const handleLaunch = async () => {
         if (status === 'RUNNING') {
-            // Since process monitoring is disabled, we treat "STOP GAME" as resetting the launcher state
-            updateStatus('IDLE');
-            RpcStart({ 
-                state: "In Launcher", 
-                details: "Leilos V2", 
-                enable_timer: true 
-            }).catch(console.error);
+            try {
+                // Call backend to kill fortnite processes
+                await invoke('kill_fortnite');
+                
+                updateStatus('IDLE');
+                RpcStart({ 
+                    state: "En el Launcher", 
+                    details: "Esperando...", 
+                    enable_timer: true 
+                }).catch(console.error);
+            } catch (error) {
+                console.error('Failed to close game:', error);
+                alert(`Failed to close game: ${error}`);
+            }
             return;
         }
 
@@ -56,11 +63,14 @@ const LaunchButton: React.FC<LaunchButtonProps> = ({ onStatusChange }) => {
                 backendUrl,
                 hostUrl,
                 manualExchangeCode: manualCode || null,
+                redirectDll: redirectDLL || "",
+                consoleDll: consoleDLL || "",
+                gameServerDll: "",
             });
 
             if (result) {
                 updateStatus('RUNNING');
-                RpcStart({ details: "Playing Fortnite", state: "In Game", enable_timer: true }).catch(console.error);
+                RpcStart({ details: "Jugando Fortnite", state: "En Partida", enable_timer: true }).catch(console.error);
                 // Status will be reset to IDLE when 'game-exited' event is received
             } else {
                 updateStatus('ERROR');

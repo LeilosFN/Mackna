@@ -19,15 +19,15 @@ export async function RpcStart(config?: Partial<RpcConfig>): Promise<void> {
   const defaultConfig: RpcConfig = {
     // To change "Erbium launcher" to "Leilos", you must create a new Application at https://discord.com/developers/applications
     // and replace this client_id with your own.
-    client_id: "1461856325716676679",
-    state: "In Launcher",
-    details: "Leilos",
-    large_image: "logo",
+    client_id: "1461856325716676679", // Updated Client ID (Placeholder - User should update this)
+    state: "En el Launcher",
+    details: "Explorando",
+    large_image: "logo", // Ensure you upload an image named 'logo' to Discord Developer Portal
     large_text: "Leilos Launcher",
     small_image: "none",
     small_text: "none",
-    button_1_text: "none",
-    button_1_url: "none",
+    button_1_text: "Discord",
+    button_1_url: "https://leilos.qzz.io",
     button_2_text: "none",
     button_2_url: "none",
     enable_timer: true,

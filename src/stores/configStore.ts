@@ -5,9 +5,15 @@ interface ConfigState {
     fortnitePath: string;
     backendUrl: string;
     hostUrl: string;
+    redirectDLL: string;
+    consoleDLL: string;
+    gameServerDll: string;
     setFortnitePath: (path: string) => void;
     setBackendUrl: (url: string) => void;
     setHostUrl: (url: string) => void;
+    setRedirectDLL: (path: string) => void;
+    setConsoleDLL: (path: string) => void;
+    setGameServerDll: (path: string) => void;
 }
 
 export const useConfigStore = create<ConfigState>()(
@@ -15,20 +21,40 @@ export const useConfigStore = create<ConfigState>()(
         (set) => ({
             fortnitePath: '',
             backendUrl: 'https://launcher.leilos.qzz.io',
-            hostUrl: 'http://launcher.leilos.qzz.io:7777',
+            hostUrl: 'http://79.117.129.88:7777',
+            redirectDLL: '',
+            consoleDLL: '',
+            gameServerDll: '',
             setFortnitePath: (path) => set({ fortnitePath: path }),
             setBackendUrl: (url) => set({ backendUrl: url }),
             setHostUrl: (url) => set({ hostUrl: url }),
+            setRedirectDLL: (path) => set({ redirectDLL: path }),
+            setConsoleDLL: (path) => set({ consoleDLL: path }),
+            setGameServerDll: (path) => set({ gameServerDll: path }),
         }),
         {
             name: 'leilos-config',
             storage: createJSONStorage(() => localStorage),
-            version: 15, // Bumped version to force migration
+            version: 17, // Bumped version to force migration
             migrate: (persistedState: any) => {
-                persistedState.backendUrl = 'https://launcher.leilos.qzz.io';
-                if (!persistedState.hostUrl) {
-                    persistedState.hostUrl = 'http://launcher.leilos.qzz.io:7777';
+                if (!persistedState) {
+                    return {
+                        fortnitePath: '',
+                        backendUrl: 'https://launcher.leilos.qzz.io',
+                        hostUrl: 'http://79.117.129.88:7777',
+                        redirectDLL: '',
+                        consoleDLL: '',
+                        gameServerDll: ''
+                    };
                 }
+                persistedState.backendUrl = 'https://launcher.leilos.qzz.io';
+                persistedState.hostUrl = 'http://79.117.129.88:7777';
+                
+                // Initialize new fields if they don't exist
+                if (typeof persistedState.redirectDLL === 'undefined') persistedState.redirectDLL = '';
+                if (typeof persistedState.consoleDLL === 'undefined') persistedState.consoleDLL = '';
+                if (typeof persistedState.gameServerDll === 'undefined') persistedState.gameServerDll = '';
+                
                 return persistedState;
             },
         }
