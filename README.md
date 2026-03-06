@@ -7,7 +7,6 @@ Launcher oficial de Leilos built con Tauri + React + TypeScript.
 - ✨ Diseño con tema dorado
 - 🔐 Autenticación con email/password
 - 🎮 Lanzamiento de Fortnite con argumentos personalizados
-- ⚙️ Configuración de rutas y URLs del backend
 
 ## Requisitos Previos
 
@@ -19,7 +18,7 @@ Launcher oficial de Leilos built con Tauri + React + TypeScript.
 
 1. Clona el repositorio:
 ```bash
-git clone https://github.com/LeilosFN/launcher-v2.git
+git clone https://github.com/LeilosFN/launcher.git
 cd leilos-launcher-beta
 ```
 
@@ -94,3 +93,4 @@ En la primera ejecución, deberás seleccionar la carpeta ROOT de tu instalació
 ## Tecnologías Utilizadas
 
 - **Frontend**: React + TypeScript + TailwindCSS
+
