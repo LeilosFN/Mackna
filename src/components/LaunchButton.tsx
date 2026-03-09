@@ -4,6 +4,7 @@ import { useUserStore } from '../stores/userStore';
 import { useConfigStore } from '../stores/configStore';
 import { useGameStore, LaunchStatus } from '../stores/gameStore';
 import { RpcStart } from '../utils/rpc';
+import { useTranslation } from '../utils/translations';
 
 interface LaunchButtonProps {
     onStatusChange?: (status: LaunchStatus) => void;
@@ -15,6 +16,7 @@ const LaunchButton: React.FC<LaunchButtonProps> = ({ onStatusChange }) => {
     const [showInput, setShowInput] = useState(false);
     const { email, password } = useUserStore();
     const { fortnitePath, backendUrl, hostUrl, redirectDLL, consoleDLL } = useConfigStore();
+    const { t } = useTranslation();
 
     const updateStatus = (newStatus: LaunchStatus) => {
         setStatus(newStatus);
@@ -41,17 +43,9 @@ const LaunchButton: React.FC<LaunchButtonProps> = ({ onStatusChange }) => {
         }
 
         if (!fortnitePath) {
-            alert('Please select Fortnite installation path in Settings');
+            alert(t('settings.gamePath') + ' ' + t('settings.notSelected'));
             return;
         }
-
-        // Authentication check removed to allow offline/bypass mode
-        /*
-        if (!email || !password) {
-            alert('Please login first');
-            return;
-        }
-        */
 
         try {
             updateStatus('LAUNCHING');
@@ -85,13 +79,13 @@ const LaunchButton: React.FC<LaunchButtonProps> = ({ onStatusChange }) => {
     const getButtonText = () => {
         switch (status) {
             case 'LAUNCHING':
-                return 'LAUNCHING...';
+                return t('home.launching');
             case 'RUNNING':
-                return 'STOP GAME';
+                return t('home.stop');
             case 'ERROR':
-                return 'ERROR - TRY AGAIN';
+                return t('home.error');
             default:
-                return 'LAUNCH';
+                return t('home.launch');
         }
     };
 

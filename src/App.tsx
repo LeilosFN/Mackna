@@ -4,6 +4,8 @@ import { invoke } from '@tauri-apps/api';
 import { open as openShell } from '@tauri-apps/api/shell';
 import { open as openDialog } from '@tauri-apps/api/dialog';
 import { listen } from '@tauri-apps/api/event';
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/api/notification';
+import { useTranslation } from './utils/translations';
 import Layout from './components/Layout';
 import LaunchButton from './components/LaunchButton';
 import LoginModal from './components/LoginModal';
@@ -35,13 +37,15 @@ const App: React.FC = () => {
     const [serverData, setServerData] = useState<{ status: boolean; services?: Service[]; news?: { title: string; content: string; date: string } } | null>(null);
     const [isOutdated, setIsOutdated] = useState(false);
     
+    const { t } = useTranslation();
     const { email, _hasHydrated } = useUserStore();
     const { 
         fortnitePath, setFortnitePath, 
         backendUrl, setBackendUrl, 
         hostUrl, setHostUrl,
         redirectDLL, setRedirectDLL,
-        consoleDLL, setConsoleDLL
+        consoleDLL, setConsoleDLL,
+        language, setLanguage
     } = useConfigStore();
 
     const compareVersions = (v1: string, v2: string) => {
@@ -65,7 +69,7 @@ const App: React.FC = () => {
                 setAppVersion(currentVersion);
 
                 // Fetch status
-                const statusRes = await fetch('https://cdn.leilos.qzz.io/json/status.json');
+                const statusRes = await fetch('https://cdn.leilos.qzz.io/api/status.json');
                 const statusJson = await statusRes.json();
                 
                 // Check version
@@ -78,7 +82,7 @@ const App: React.FC = () => {
                 let newsData = statusJson.news;
                 if (!newsData) {
                     try {
-                        const newsRes = await fetch('https://cdn.leilos.qzz.io/json/news.json');
+                        const newsRes = await fetch('https://cdn.leilos.qzz.io/api/news.json');
                         newsData = await newsRes.json();
                     } catch (e) {
                         console.log("No separate news file found");
@@ -139,6 +143,27 @@ const App: React.FC = () => {
             setStatus('IDLE');
         });
 
+        // Notificación de inicio del juego (Solicitado por el usuario)
+        const unlistenLaunching = listen<string>('game-launching', async (event) => {
+            try {
+                let permissionGranted = await isPermissionGranted();
+                if (!permissionGranted) {
+                    const permission = await requestPermission();
+                    permissionGranted = permission === 'granted';
+                }
+                
+                if (permissionGranted) {
+                    const messageKey = event.payload === 'gameLaunching' ? 'notifications.firstTimeMsg' : event.payload;
+                    sendNotification({ 
+                        title: t('notifications.title'), 
+                        body: t(messageKey) 
+                    });
+                }
+            } catch (err) {
+                console.error('Error al enviar la notificación:', err);
+            }
+        });
+
         // Listen for launch status updates
         const unlistenStatus = listen<string>('launch-status', (event) => {
              // Handle status updates if main.js sends them (optional backup)
@@ -150,6 +175,7 @@ const App: React.FC = () => {
 
         return () => {
             unlistenExit.then(f => f());
+            unlistenLaunching.then(f => f());
             unlistenStatus.then(f => f());
             unlistenDownload.then(f => f());
             clearInterval(intervalId);
@@ -228,7 +254,7 @@ const App: React.FC = () => {
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
                                 <h3 className="text-gray-400 text-xs font-bold tracking-widest uppercase mb-4 flex items-center gap-2">
                                     <span className="w-2 h-2 rounded-full bg-gold-primary"></span>
-                                    Estado del Sistema
+                                    {t('home.systemStatus')}
                                 </h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10 max-h-[150px] overflow-y-auto custom-scrollbar">
                                     {serverData?.services && serverData.services.length > 0 ? (
@@ -263,12 +289,12 @@ const App: React.FC = () => {
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-gold-primary to-gold-highlight p-0.5 shadow-lg shadow-gold-primary/20">
                                         <div className="w-full h-full bg-[#1a1f2e] rounded-xl flex items-center justify-center overflow-hidden">
-                                            <img src="/logo.jpg" alt="Leilos Logo" className="w-full h-full object-cover" />
+                                            <img src="https://cdn.leilos.qzz.io/public/media/images/logo/logo.jpg" alt="Leilos Logo" className="w-full h-full object-cover" />
                                         </div>
                                     </div>
                                     <div>
-                                        <p className="text-gray-400 font-medium text-xs mb-0.5">Bienvenido,</p>
-                                        <h2 className="text-xl font-bold text-white font-display tracking-wide truncate max-w-[150px]">{email ? email.split('@')[0] : 'Invitado'}</h2>
+                                        <p className="text-gray-400 font-medium text-xs mb-0.5">{t('home.welcome')},</p>
+                                        <h2 className="text-xl font-bold text-white font-display tracking-wide truncate max-w-[150px]">{email ? email.split('@')[0] : t('home.guest')}</h2>
                                     </div>
                                 </div>
                             </div>
@@ -278,21 +304,21 @@ const App: React.FC = () => {
                         <div className="grid grid-cols-1 gap-6 flex-1">
                             {/* Hero / Season Card */}
                             <div className="bg-[#151921] rounded-2xl overflow-hidden border border-white/5 relative group min-h-[400px]">
-                                <div className="absolute inset-0 bg-[url('https://cdn.leilos.qzz.io/media/bg1.jpg')] bg-cover bg-center transition-transform duration-700 group-hover:scale-105"></div>
+                                <div className="absolute inset-0 bg-[url('https://cdn.leilos.qzz.io/public/media/images/logo/logo.png')] bg-cover bg-center transition-transform duration-700 group-hover:scale-105"></div>
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#0B0E14] via-[#0B0E14]/60 to-transparent"></div>
                                 
                                 <div className="absolute bottom-0 left-0 p-8 w-full">
                                     <div className="flex items-center gap-3 mb-4">
                                         <span className="px-3 py-1 rounded-full bg-gold-primary text-bg-dark text-xs font-bold border border-gold-primary shadow-[0_0_10px_rgba(212,175,55,0.4)]">
-                                            TEMPORADA 1
+                                            {t('home.season')}
                                         </span>
                                         <span className="px-3 py-1 rounded-full bg-white/10 text-white text-xs font-bold backdrop-blur-md border border-white/10">
-                                            CAPÍTULO 5
+                                            {t('home.chapter')}
                                         </span>
                                     </div>
-                                    <h2 className="text-5xl font-bold text-white mb-4 font-display drop-shadow-lg">UNDERGROUND<br/>SOCIETY</h2>
+                                    <h2 className="text-5xl font-bold text-white mb-4 font-display drop-shadow-lg leading-tight">{t('home.heroTitle')}</h2>
                                     <p className="text-gray-200 mb-8 max-w-xl text-sm leading-relaxed drop-shadow-md font-medium">
-                                        Únete a la resistencia y partele la boca con un 200 a tus enemigos. ¿Estás listo para el salto?
+                                        {t('home.heroDesc')}
                                     </p>
                                     <div className="flex items-center gap-4">
                                         <LaunchButton />
@@ -306,9 +332,40 @@ const App: React.FC = () => {
             case 'settings':
                 return (
                     <div className="max-w-4xl mx-auto pt-10 animate-fade-in p-6 h-full overflow-y-auto">
-                        <h2 className="text-3xl font-bold text-white mb-8 font-display">Configuración</h2>
+                        <h2 className="text-3xl font-bold text-white mb-8 font-display">{t('settings.title')}</h2>
                         
                         <div className="grid grid-cols-1 gap-6">
+                            {/* Language Configuration */}
+                            <div className="bg-[#151921] rounded-2xl p-8 border border-white/5 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-gold-primary/5 rounded-full blur-3xl -mr-16 -mt-16 transition-opacity group-hover:opacity-75"></div>
+                                <div className="relative z-10">
+                                    <div className="flex items-center gap-4 mb-6">
+                                        <div className="p-3 bg-purple-500/10 rounded-xl">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-bold text-white">{t('settings.language')}</h3>
+                                            <p className="text-gray-400 text-sm">{t('settings.languageDesc')}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex gap-4">
+                                        <button 
+                                            onClick={() => setLanguage('es')}
+                                            className={`flex-1 py-4 rounded-xl font-bold transition-all border ${language === 'es' ? 'bg-gold-primary text-bg-dark border-gold-primary shadow-[0_0_20px_rgba(212,175,55,0.2)]' : 'bg-white/5 text-white border-white/10 hover:border-white/20'}`}
+                                        >
+                                            Español
+                                        </button>
+                                        <button 
+                                            onClick={() => setLanguage('en')}
+                                            className={`flex-1 py-4 rounded-xl font-bold transition-all border ${language === 'en' ? 'bg-gold-primary text-bg-dark border-gold-primary shadow-[0_0_20px_rgba(212,175,55,0.2)]' : 'bg-white/5 text-white border-white/10 hover:border-white/20'}`}
+                                        >
+                                            English
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Game Path Configuration */}
                             <div className="bg-[#151921] rounded-2xl p-8 border border-white/5 relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-gold-primary/5 rounded-full blur-3xl -mr-16 -mt-16 transition-opacity group-hover:opacity-75"></div>
@@ -318,21 +375,21 @@ const App: React.FC = () => {
                                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400"><path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"></path><polygon points="18 2 22 6 12 16 8 16 8 12 18 2"></polygon></svg>
                                         </div>
                                         <div>
-                                            <h3 className="text-xl font-bold text-white">Ruta de Instalación</h3>
-                                            <p className="text-gray-400 text-sm">Ubicación de los archivos del juego (Build 28.30)</p>
+                                            <h3 className="text-xl font-bold text-white">{t('settings.gamePath')}</h3>
+                                            <p className="text-gray-400 text-sm">{t('settings.gamePathDesc')}</p>
                                         </div>
                                     </div>
                                     
                                     <div className="flex flex-col md:flex-row gap-4 items-center">
                                         <div className="w-full flex-1 bg-black/40 rounded-xl border border-white/10 px-4 py-4 flex items-center gap-3">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 shrink-0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                                            <span className="text-gray-300 font-mono text-sm truncate select-all">{fortnitePath || 'No seleccionado'}</span>
+                                            <span className="text-gray-300 font-mono text-sm truncate select-all">{fortnitePath || t('settings.notSelected')}</span>
                                         </div>
                                         <button 
                                             onClick={handleSelectPath}
                                             className="w-full md:w-auto bg-white/5 hover:bg-white/10 text-white px-8 py-4 rounded-xl font-bold text-sm transition-all border border-white/10 hover:border-white/20 hover:scale-[1.02] active:scale-95"
                                         >
-                                            Cambiar Ruta
+                                            {t('settings.changePath')}
                                         </button>
                                     </div>
                                 </div>
@@ -342,11 +399,11 @@ const App: React.FC = () => {
                             <div className="bg-[#151921] rounded-2xl p-8 border border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
                                 <div className="flex items-center gap-4">
                                     <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden shadow-lg shadow-gold-primary/20">
-                                        <img src="/logo.jpg" alt="Leilos Logo" className="w-full h-full object-cover" />
+                                        <img src="https://cdn.leilos.qzz.io/public/media/images/logo/logo.jpg" alt="Leilos Logo" className="w-full h-full object-cover" />
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-bold text-white font-display">Leilos Launcher</h3>
-                                        <p className="text-gray-500 text-sm">Versión {appVersion} • <span className="text-gold-primary">Stable</span></p>
+                                        <p className="text-gray-500 text-sm">{t('settings.version')} {appVersion} • <span className="text-gold-primary">{t('settings.stable')}</span></p>
                                     </div>
                                 </div>
                                 
@@ -373,26 +430,25 @@ const App: React.FC = () => {
                     <div className="max-w-5xl mx-auto pt-10 animate-fade-in p-6">
                         <div className="helios-card overflow-hidden relative min-h-[500px] flex flex-col justify-center group">
                             {/* Background Image & Gradient */}
-                            <div className="absolute inset-0 bg-[url('https://cdn.leilos.qzz.io/media/bg1.jpg')] bg-cover bg-center transition-transform duration-700 group-hover:scale-105"></div>
+                            <div className="absolute inset-0 bg-[url('https://cdn.leilos.qzz.io/public/media/images/logo/logo.png')] bg-cover bg-center transition-transform duration-700 group-hover:scale-105"></div>
                             <div className="absolute inset-0 bg-gradient-to-t from-[#0B0E14] via-[#0B0E14]/60 to-transparent"></div>
                             
                             {/* Content */}
                             <div className="relative z-10 p-8 md:p-12 max-w-2xl">
                                 <div className="flex items-center justify-between mb-2">
-                                    <h2 className="text-5xl font-bold font-display text-white drop-shadow-lg">Fortnite</h2>
-                                    <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-mono text-gray-400 border border-white/5 backdrop-blur-md">v28.30</span>
+                                    <h2 className="text-5xl font-bold font-display text-white drop-shadow-lg">{t('download.title')}</h2>
+                                    <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-mono text-gray-400 border border-white/5 backdrop-blur-md">._.</span>
                                 </div>
                                 
                                 <div className="flex items-center gap-3 mb-8">
-                                    <span className="text-gold-primary font-medium tracking-widest text-sm uppercase font-display drop-shadow-md">Capítulo 5</span>
+                                    <span className="text-gold-primary font-medium tracking-widest text-sm uppercase font-display drop-shadow-md">{t('download.chapter')}</span>
                                     <span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
-                                    <span className="text-gray-300 font-medium tracking-widest text-sm uppercase font-display drop-shadow-md">Temporada 1</span>
+                                    <span className="text-gray-300 font-medium tracking-widest text-sm uppercase font-display drop-shadow-md">{t('download.season')}</span>
                                 </div>
                                 
                                 <div className="mb-10 p-6 bg-black/40 rounded-2xl border border-white/5 backdrop-blur-sm shadow-xl">
                                     <p className="text-gray-200 text-sm leading-relaxed font-medium">
-                                        La temporada comenzó el <span className="text-white font-bold">3 de diciembre de 2023</span> y concluyó el <span className="text-white font-bold">8 de marzo de 2024</span>. 
-                                        Experimenta el mapa y las armas clásicas exactamente como eran.
+                                        {t('download.desc')}
                                     </p>
                                 </div>
                                 
@@ -402,8 +458,8 @@ const App: React.FC = () => {
                                         disabled={downloadProgress?.state === 'downloading' || downloadProgress?.state === 'extracting'}
                                         className="w-full md:w-auto bg-gold-primary text-bg-dark px-10 py-4 rounded-xl font-bold hover:bg-gold-highlight transition-all duration-300 font-display tracking-widest disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(212,175,55,0.3)] hover:shadow-[0_0_30px_rgba(212,175,55,0.5)] transform hover:-translate-y-1 border border-gold-primary/20 min-w-[240px]"
                                     >
-                                        {downloadProgress?.state === 'downloading' ? 'DESCARGANDO...' : 
-                                         downloadProgress?.state === 'extracting' ? 'EXTRAYENDO...' : 'INSTALAR JUEGO'}
+                                        {downloadProgress?.state === 'downloading' ? t('download.downloading') : 
+                                         downloadProgress?.state === 'extracting' ? t('download.extracting') : t('download.install')}
                                     </button>
                                 </div>
 
@@ -425,9 +481,9 @@ const App: React.FC = () => {
                                             </div>
                                         </div>
                                         <div className="mt-3 text-xs text-gray-400 text-right font-mono flex justify-end gap-2">
-                                            <span>{(downloadProgress.downloaded / 1024 / 1024).toFixed(2)} MB</span>
+                                            <span>{(downloadProgress.downloaded / 1024 / 1024).toFixed(2)} {t('download.mb')}</span>
                                             <span className="text-gray-600">/</span>
-                                            <span>{(downloadProgress.total / 1024 / 1024).toFixed(2)} MB</span>
+                                            <span>{(downloadProgress.total / 1024 / 1024).toFixed(2)} {t('download.mb')}</span>
                                         </div>
                                     </div>
                                 )}
@@ -445,7 +501,7 @@ const App: React.FC = () => {
         return (
             <div className="flex h-screen w-screen items-center justify-center bg-black/95 text-white p-6 relative overflow-hidden">
                 {/* Background effects */}
-                <div className="absolute inset-0 bg-[url('https://cdn.leilos.qzz.io/media/bg1.jpg')] bg-cover bg-center opacity-20 blur-sm"></div>
+                <div className="absolute inset-0 bg-[url('https://cdn.leilos.qzz.io/public/media/images/logo/logo.jpg')] bg-cover bg-center opacity-20 blur-sm"></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent"></div>
                 
                 <div className="relative z-10 text-center space-y-8 max-w-md w-full p-10 rounded-2xl bg-[#151921] border border-orange-500/30 shadow-[0_0_50px_rgba(249,115,22,0.15)] flex flex-col items-center">
@@ -484,20 +540,24 @@ const App: React.FC = () => {
         );
     }
 
+    if (!email) {
+        return (
+            <>
+                <Particles className="absolute inset-0 z-0 pointer-events-none" quantity={50} />
+                <LoginModal 
+                    isOpen={true} 
+                    onClose={() => {}} 
+                />
+            </>
+        );
+    }
+
     return (
         <Layout currentView={currentView} onChangeView={setCurrentView}>
             <Particles className="absolute inset-0 z-0 pointer-events-none" quantity={50} />
             <div className="relative z-10 w-full h-full">
                 {renderContent()}
             </div>
-            
-            <LoginModal 
-                isOpen={isLoginOpen} 
-                onClose={() => {
-                    // Prevent closing if no email
-                    if (email) setIsLoginOpen(false);
-                }} 
-            />
         </Layout>
     );
 };
