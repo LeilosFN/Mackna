@@ -22,7 +22,8 @@
                 "all": true,
                 "scope": [
                     "https://api.leilos.qzz.io/*",
-                    "https://cdn.leilos.qzz.io/*"
+                    "https://cdn.leilos.qzz.io/*",
+                    "https://cdn.discordapp.com/*"
                 ]
             },
             "fs": {
@@ -48,7 +49,14 @@
             }
         ],
         "security": {
-            "csp": null
+            "csp": null,
+            "dangerousRemoteDomainIpcAccess": [
+                {
+                    "domain": "api.leilos.qzz.io",
+                    "windows": ["login", "main"],
+                    "enableTauriAPI": true
+                }
+            ]
         },
         "bundle": {
             "active": true,

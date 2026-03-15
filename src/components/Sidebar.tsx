@@ -8,7 +8,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
-    const { email, clearCredentials } = useUserStore();
+    const { email, username, avatar, clearCredentials } = useUserStore();
     const { t } = useTranslation();
 
     const navItems = [
@@ -63,14 +63,18 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
             {/* User Profile */}
             <div className="p-4">
                 <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors cursor-default group">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-sm font-bold text-white shadow-inner">
-                        {email ? email.substring(0, 2).toUpperCase() : '??'}
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-sm font-bold text-white shadow-inner overflow-hidden">
+                        {avatar ? (
+                            <img src={avatar} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                            email ? email.substring(0, 2).toUpperCase() : '??'
+                        )}
                     </div>
                     <div className="hidden lg:block flex-1 overflow-hidden">
-                        <p className="text-sm font-bold text-white truncate font-display">{email || 'Invitado'}</p>
+                        <p className="text-sm font-bold text-white truncate font-display">{username || (email ? email.split('@')[0] : t('home.guest'))}</p>
                         <div className="flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                            <p className="text-xs text-gray-400">En línea</p>
+                            <p className="text-xs text-gray-400">{t('home.welcome')}</p>
                         </div>
                     </div>
                     <button 

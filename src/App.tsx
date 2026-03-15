@@ -29,6 +29,12 @@ interface Service {
     color: string;
 }
 
+interface UserLoginPayload {
+    discordId: string;
+    username: string;
+    avatar: string;
+}
+
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState('home');
     const [appVersion, setAppVersion] = useState<string>('1.1.1');
@@ -38,7 +44,23 @@ const App: React.FC = () => {
     const [isOutdated, setIsOutdated] = useState(false);
     
     const { t } = useTranslation();
-    const { email, _hasHydrated } = useUserStore();
+    const { email, discordId, username, avatar, fetchUserProfile, setCredentials, setUserInfo, _hasHydrated } = useUserStore();
+
+    useEffect(() => {
+        const unlistenLogin = listen<UserLoginPayload>('user-login-success', (event) => {
+            const { discordId, username, avatar } = event.payload;
+            const email = `${discordId}@leilos.tf`;
+            const fixedPassword = '1234567890';
+            
+            setCredentials(discordId, email, fixedPassword);
+            setUserInfo(username, avatar);
+            setIsLoginOpen(false);
+        });
+
+        return () => {
+            unlistenLogin.then(f => f());
+        };
+    }, [setCredentials, setUserInfo]);
     const { 
         fortnitePath, setFortnitePath, 
         backendUrl, setBackendUrl, 
@@ -47,6 +69,12 @@ const App: React.FC = () => {
         consoleDLL, setConsoleDLL,
         language, setLanguage
     } = useConfigStore();
+
+    useEffect(() => {
+        if (discordId && !username) {
+            fetchUserProfile(discordId);
+        }
+    }, [discordId, username, fetchUserProfile]);
 
     const compareVersions = (v1: string, v2: string) => {
         const p1 = v1.split('.').map(Number);
@@ -289,12 +317,12 @@ const App: React.FC = () => {
                                 <div className="relative z-10 flex flex-col items-center gap-3">
                                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-gold-primary to-gold-highlight p-0.5 shadow-lg shadow-gold-primary/20">
                                         <div className="w-full h-full bg-[#1a1f2e] rounded-xl flex items-center justify-center overflow-hidden">
-                                            <img src="https://cdn.leilos.qzz.io/public/media/images/logo/logo.jpg" alt="Leilos Logo" className="w-full h-full object-cover" />
+                                            <img src={avatar || "https://cdn.leilos.qzz.io/public/media/images/logo/logo.jpg"} alt="User Avatar" className="w-full h-full object-cover" />
                                         </div>
                                     </div>
                                     <div>
                                         <p className="text-gray-400 font-medium text-xs mb-0.5">{t('home.welcome')},</p>
-                                        <h2 className="text-xl font-bold text-white font-display tracking-wide truncate max-w-[150px]">{email ? email.split('@')[0] : t('home.guest')}</h2>
+                                        <h2 className="text-xl font-bold text-white font-display tracking-wide truncate max-w-[150px]">{username || (email ? email.split('@')[0] : t('home.guest'))}</h2>
                                     </div>
                                 </div>
                             </div>

@@ -28,6 +28,7 @@ winapi = { version = "0.3", features = ["processthreadsapi", "winbase", "handlea
 widestring = "1.0"
 sysinfo = "0.29"
 discord-rich-presence = "0.2.4"
+open = "5.0"
 
 [features]
 # by default Tauri runs in production mode

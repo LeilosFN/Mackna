@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useUserStore } from '../stores/userStore';
-import { useConfigStore, Language } from '../stores/configStore';
+import { useConfigStore } from '../stores/configStore';
 import { useTranslation } from '../utils/translations';
 
 interface LoginModalProps {
@@ -9,23 +9,30 @@ interface LoginModalProps {
 }
 
 const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
-    const { email, setCredentials } = useUserStore();
+    const { discordId, setCredentials, fetchUserProfile } = useUserStore();
     const { language, setLanguage } = useConfigStore();
     const { t } = useTranslation();
-    const [localEmail, setLocalEmail] = useState(email || '');
-    const [localPassword, setLocalPassword] = useState('');
+    const [localDiscordId, setLocalDiscordId] = useState(discordId || '');
 
     if (!isOpen) return null;
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!localEmail || !localPassword) {
+        if (!localDiscordId) {
             alert(t('login.error'));
             return;
         }
 
-        setCredentials(localEmail, localPassword);
+        // Fixed password as requested previously
+        const fixedPassword = '1234567890';
+        const email = `${localDiscordId}@leilos.tf`;
+        
+        setCredentials(localDiscordId, email, fixedPassword);
+        
+        // Fetch profile info immediately after login to get username and avatar
+        fetchUserProfile(localDiscordId).catch(console.error);
+        
         onClose();
     };
 
@@ -67,28 +74,17 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                         <label className="block text-gray-400 text-[10px] font-bold mb-2 uppercase tracking-widest font-display">{t('login.email')}</label>
                         <input
                             type="text"
-                            value={localEmail}
-                            onChange={(e) => setLocalEmail(e.target.value)}
+                            value={localDiscordId}
+                            onChange={(e) => setLocalDiscordId(e.target.value)}
                             className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-gold-primary/50 transition-all outline-none"
-                            placeholder="usuario@email.com"
+                            placeholder="Tu ID de Discord"
                             autoFocus
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-gray-400 text-[10px] font-bold mb-2 uppercase tracking-widest font-display">{t('login.password')}</label>
-                        <input
-                            type="password"
-                            value={localPassword}
-                            onChange={(e) => setLocalPassword(e.target.value)}
-                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-gold-primary/50 transition-all outline-none"
-                            placeholder="••••••••"
                         />
                     </div>
 
                     <button
                         type="submit"
-                        className="w-full bg-gold-primary text-bg-dark font-bold py-4 rounded-xl hover:bg-gold-highlight transition-all duration-300 font-display tracking-widest uppercase shadow-[0_0_20px_rgba(212,175,55,0.3)] hover:shadow-[0_0_30px_rgba(212,175,55,0.5)] transform hover:-translate-y-1 active:scale-95"
+                        className="w-full bg-gold-primary text-bg-dark font-bold py-4 rounded-xl hover:bg-gold-highlight transition-all duration-300 font-display tracking-widest uppercase shadow-[0_0_20px_rgba(212,175,55,0.3)] hover:shadow-[0_0_30_rgba(212,175,55,0.5)] transform hover:-translate-y-1 active:scale-95"
                     >
                         {t('login.button')}
                     </button>

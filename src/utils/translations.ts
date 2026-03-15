@@ -5,11 +5,10 @@ const translations = {
         login: {
             title: 'INICIAR SESIÓN',
             subtitle: 'Bienvenido a Leilos',
-            email: 'Correo',
-            password: 'Contraseña',
+            email: 'ID de Discord',
             button: 'Entrar',
             footer: 'Protegido por Seguridad Leilos',
-            error: 'Por favor ingresa correo y contraseña'
+            error: 'Por favor ingresa tu ID de Discord'
         },
         nav: {
             home: 'Inicio',
@@ -61,11 +60,10 @@ const translations = {
         login: {
             title: 'LOGIN',
             subtitle: 'ENTER THE UNDERWORLD',
-            email: 'Email',
-            password: 'Password',
+            email: 'Discord ID',
             button: 'Login',
             footer: 'Protected by Leilos Security',
-            error: 'Please enter email and password'
+            error: 'Please enter your Discord ID'
         },
         nav: {
             home: 'Home',
