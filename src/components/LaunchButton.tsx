@@ -48,6 +48,13 @@ const LaunchButton: React.FC<LaunchButtonProps> = ({ onStatusChange }) => {
         }
 
         try {
+            // Re-verify version before launching
+            const isCorrectVersion = await invoke<boolean>('check_fortnite_version', { path: fortnitePath });
+            if (!isCorrectVersion) {
+                alert('Error: La versión actual de Fortnite no es compatible. Este launcher solo es compatible con la versión v28.30 exacta.');
+                return;
+            }
+
             updateStatus('LAUNCHING');
 
             const result = await invoke<boolean>('launch_game', {
@@ -76,62 +83,83 @@ const LaunchButton: React.FC<LaunchButtonProps> = ({ onStatusChange }) => {
         }
     };
 
-    const getButtonText = () => {
-        switch (status) {
-            case 'LAUNCHING':
-                return t('home.launching');
-            case 'RUNNING':
-                return t('home.stop');
-            case 'ERROR':
-                return t('home.error');
-            default:
-                return t('home.launch');
-        }
-    };
-
     const getButtonClass = () => {
-        const base = "px-10 py-3 font-bold text-lg rounded transition-all duration-300 transform hover:scale-105 shadow-[0_0_20px_rgba(212,175,55,0.2)] hover:shadow-[0_0_30px_rgba(212,175,55,0.4)] font-display tracking-widest uppercase border border-gold-primary/20";
+        const base = "relative px-10 py-4 font-black text-lg transition-all duration-300 transform font-display tracking-[0.2em] uppercase overflow-hidden group";
+        
+        // Clip path style for angled corners
+        const angled = "clip-path-polygon-[10%_0,100%_0,90%_100%,0%_100%]"; 
         
         switch (status) {
             case 'LAUNCHING':
-                return `${base} bg-yellow-600/50 text-white cursor-wait animate-pulse`;
+                return `${base} bg-yellow-600/20 text-yellow-500 cursor-wait border border-yellow-500/30`;
             case 'RUNNING':
-                return `${base} bg-red-600/20 text-red-500 border-red-500/50 hover:bg-red-600/30 hover:shadow-[0_0_30px_rgba(239,68,68,0.4)]`;
+                return `${base} bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500/20 hover:shadow-[0_0_40px_rgba(239,68,68,0.3)]`;
             case 'ERROR':
                 return `${base} bg-red-600 text-white hover:bg-red-700`;
             default:
-                return `${base} bg-gold-primary text-bg-dark hover:bg-gold-highlight`;
+                return `${base} bg-gradient-to-r from-gold-primary to-gold-secondary text-bg-dark hover:shadow-[0_0_50px_rgba(212,175,55,0.4)] hover:scale-105 active:scale-95`;
+        }
+    };
+
+    const getButtonContent = () => {
+        switch (status) {
+            case 'LAUNCHING':
+                return (
+                    <div className="flex items-center gap-3">
+                        <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                        <span>{t('home.launching')}</span>
+                    </div>
+                );
+            case 'RUNNING':
+                return (
+                    <div className="flex items-center gap-3">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_red]"></span>
+                        <span>{t('home.stop')}</span>
+                    </div>
+                );
+            case 'ERROR':
+                return (
+                    <div className="flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                        </svg>
+                        <span>{t('home.error')}</span>
+                    </div>
+                );
+            default:
+                return (
+                    <div className="flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                            <path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" />
+                        </svg>
+                        <span>{t('home.launch')}</span>
+                    </div>
+                );
         }
     };
 
     return (
-        <div className="flex flex-col items-center gap-3 w-full">
-            {showInput && (
-                <input
-                    type="text"
-                    value={manualCode}
-                    onChange={(e) => setManualCode(e.target.value.trim())}
-                    placeholder="Paste Exchange Code from Discord"
-                    className="input-field text-center text-sm w-64"
-                />
-            )}
-            <div className="flex gap-2">
-                <button
-                    onClick={handleLaunch}
-                    disabled={status === 'LAUNCHING'}
-                    className={getButtonClass()}
-                >
-                    {getButtonText()}
-                </button>
+        <div className="flex flex-col items-start gap-2">
+            <button
+                onClick={handleLaunch}
+                disabled={status === 'LAUNCHING'}
+                className={getButtonClass()}
+                style={{ clipPath: "polygon(10% 0, 100% 0, 90% 100%, 0% 100%)" }}
+            >
+                {/* Shine effect overlay */}
+                <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent z-10"></div>
                 
-                <button 
-                    onClick={() => setShowInput(!showInput)}
-                    className="px-3 py-3 bg-white/5 border border-white/10 rounded hover:bg-white/10 hover:border-gold-primary/50 transition-colors text-gold-primary"
-                    title="Enter Manual Code"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                </button>
-            </div>
+                <div className="relative z-20">
+                    {getButtonContent()}
+                </div>
+            </button>
+            
+            {status === 'IDLE' && (
+                <div className="pl-6 flex items-center gap-2 text-[10px] text-gold-primary/60 font-mono tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="w-1 h-1 bg-gold-primary rounded-full"></span>
+                    Ready to drop
+                </div>
+            )}
         </div>
     );
 };

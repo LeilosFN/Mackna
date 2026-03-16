@@ -46,14 +46,14 @@ export const useUserStore = create<UserState>()(
                         console.warn(`[UserStore] Profile fetch failed with status: ${response.status}`);
                         set({ 
                             username: discordId, 
-                            avatar: 'https://cdn.discordapp.com/embed/avatars/0.png' 
+                            avatar: 'https://cdn.leilos.qzz.io/public/media/images/logo/logo.jpg' 
                         });
                     }
                 } catch (error) {
                     console.error('[UserStore] Failed to fetch user profile:', error);
                     set({ 
                         username: discordId, 
-                        avatar: 'https://cdn.discordapp.com/embed/avatars/0.png' 
+                        avatar: 'https://cdn.leilos.qzz.io/public/media/images/logo/logo.jpg' 
                     });
                 }
             },

@@ -37,11 +37,12 @@ interface UserLoginPayload {
 
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState('home');
-    const [appVersion, setAppVersion] = useState<string>('1.1.1');
+    const [appVersion, setAppVersion] = useState<string>('1.1.2');
     const [isLoginOpen, setIsLoginOpen] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState<DownloadState | null>(null);
     const [serverData, setServerData] = useState<{ status: boolean; services?: Service[]; news?: { title: string; content: string; date: string } } | null>(null);
     const [isOutdated, setIsOutdated] = useState(false);
+    const [currentServiceIndex, setCurrentServiceIndex] = useState(0);
     
     const { t } = useTranslation();
     const { email, discordId, username, avatar, fetchUserProfile, setCredentials, setUserInfo, _hasHydrated } = useUserStore();
@@ -214,6 +215,12 @@ const App: React.FC = () => {
         try {
             const path = await invoke<string>('select_folder');
             if (path) {
+                // Check if the selected path contains Fortnite v28.30
+                const isCorrectVersion = await invoke<boolean>('check_fortnite_version', { path });
+                if (!isCorrectVersion) {
+                    alert('Error: La versión seleccionada no es compatible. Por favor, selecciona la carpeta de Fortnite versión v28.30 exacta.');
+                    return;
+                }
                 setFortnitePath(path);
             }
         } catch (error) {
@@ -247,12 +254,9 @@ const App: React.FC = () => {
 
     const handleStartDownload = async () => {
         try {
-            const path = await invoke<string>('select_folder');
-            if (path) {
-                await invoke('install_game', { installPath: path });
-            }
+            await openShell('https://mini.crisu.qzz.io/?d=LeilosFiles');
         } catch (error) {
-            console.error('Failed to start download:', error);
+            console.error('Failed to open download link:', error);
         }
     };
 
@@ -266,91 +270,114 @@ const App: React.FC = () => {
         }
     }, [email, _hasHydrated]);
 
+    useEffect(() => {
+        if (!serverData?.services || serverData.services.length <= 1) return;
+        const interval = setInterval(() => {
+            setCurrentServiceIndex((prev) => (prev + 1) % serverData.services!.length);
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [serverData]);
+
     if (!_hasHydrated) {
-        return <div className="flex items-center justify-center h-screen bg-bg-dark text-gold-primary font-display">LOADING SYSTEM...</div>;
+        return <div className="flex items-center justify-center h-screen bg-bg-dark text-gold-primary font-display">{t('home.loadingSystem')}</div>;
     }
 
     const renderContent = () => {
         switch (currentView) {
             case 'home':
                 return (
-                    <div className="flex flex-col h-full animate-fade-in p-2 gap-6">
-                        {/* Top Section: User Welcome & Status */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {/* Server Status Widget - Spans 2 columns (Larger) */}
-                            <div className="md:col-span-2 bg-[#151921] rounded-2xl p-6 border border-white/5 flex flex-col justify-center relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
-                                <h3 className="text-gray-400 text-xs font-bold tracking-widest uppercase mb-4 flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-gold-primary"></span>
-                                    {t('home.systemStatus')}
-                                </h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10 max-h-[150px] overflow-y-auto custom-scrollbar">
-                                    {serverData?.services && serverData.services.length > 0 ? (
-                                        serverData.services
-                                            .map((service, index) => (
-                                            <div key={index} className="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5">
-                                                <span className="text-sm font-medium text-gray-300">{service.name}</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`w-2 h-2 rounded-full ${
-                                                        service.color === 'green' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 
-                                                        service.color === 'red' ? 'bg-red-500' : 'bg-yellow-500'
-                                                    }`}></span>
-                                                    <span className="text-xs font-mono text-white uppercase">{service.status}</span>
-                                                </div>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5 col-span-2">
-                                            <span className="text-sm font-medium text-gray-300">Servidores</span>
-                                            <div className="flex items-center gap-2">
-                                                <span className={`w-2 h-2 rounded-full ${serverData?.status ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`}></span>
-                                                <span className="text-xs font-mono text-white">{serverData?.status ? 'ONLINE' : 'OFFLINE'}</span>
-                                            </div>
+                    <div key="home" className="flex flex-col h-full animate-fade-in-up p-4 gap-6">
+                        {/* Top Bar: User Profile & Quick Actions */}
+                        <div className="flex flex-col md:flex-row gap-6">
+                            
+                            {/* User Profile Card */}
+                            <div className="glass-panel rounded-2xl p-5 flex items-center gap-5 relative overflow-hidden group min-w-[300px]">
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-gold-primary/10 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-50"></div>
+                                
+                                <div className="relative z-10 w-16 h-16 rounded-xl p-0.5 bg-gradient-to-br from-gold-primary to-transparent">
+                                    <div className="w-full h-full bg-black rounded-[10px] overflow-hidden">
+                                        <img src={avatar || "https://cdn.leilos.qzz.io/public/media/images/logo/logo.jpg"} alt="User" className="w-full h-full object-cover" />
+                                    </div>
+                                </div>
+                                
+                                <div className="flex flex-col gap-1 relative z-10 flex-1">
+                                    <h2 className="text-xl font-bold text-white font-display tracking-wide truncate">{username || (email ? email.split('@')[0] : t('home.guest'))}</h2>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => openShell('https://api.leilos.qzz.io/api/v2/discord/login')} 
+                                            className="text-[10px] font-bold px-3 py-1 bg-[#5865F2]/10 text-[#5865F2] hover:bg-[#5865F2] hover:text-white border border-[#5865F2]/30 rounded-lg transition-all flex items-center gap-2 uppercase tracking-wider"
+                                        >
+                                            <i className="fa-brands fa-discord"></i>
+                                            {t('home.account')}
+                                        </button>
+                                        <div className="px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                                            <span className="text-[10px] text-green-500 font-mono">{t('home.online')}</span>
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* User Welcome Card - Spans 1 column (Mini) */}
-                            <div className="bg-[#151921] rounded-2xl p-6 border border-white/5 relative overflow-hidden group flex flex-col items-center justify-center text-center">
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-gold-primary/5 rounded-full blur-3xl -mr-10 -mt-10 transition-opacity group-hover:opacity-75"></div>
-                                <div className="relative z-10 flex flex-col items-center gap-3">
-                                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-gold-primary to-gold-highlight p-0.5 shadow-lg shadow-gold-primary/20">
-                                        <div className="w-full h-full bg-[#1a1f2e] rounded-xl flex items-center justify-center overflow-hidden">
-                                            <img src={avatar || "https://cdn.leilos.qzz.io/public/media/images/logo/logo.jpg"} alt="User Avatar" className="w-full h-full object-cover" />
+                            {/* Server Status - Compact */}
+                            <div className="glass-panel rounded-2xl p-5 flex-1 flex flex-col justify-center relative overflow-hidden">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-gray-400 text-[10px] font-bold tracking-[0.2em] uppercase flex items-center gap-2">
+                                        <i className="fa-solid fa-server text-gold-primary"></i>
+                                        {t('home.systemStatus')}
+                                    </h3>
+                                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${serverData?.status ? 'text-green-400 border-green-500/30 bg-green-500/5' : 'text-red-400 border-red-500/30 bg-red-500/5'}`}>
+                                        {serverData?.status ? t('home.operational') : t('home.issues')}
+                                    </span>
+                                </div>
+                                <div className="relative h-10 flex items-center overflow-hidden bg-white/5 border border-white/5 rounded-xl px-4">
+                                    {serverData?.services && serverData.services.length > 0 ? (
+                                        <div 
+                                            key={currentServiceIndex} 
+                                            className="w-full flex items-center justify-between animate-fade-in-up"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <span className={`w-2 h-2 rounded-full ${serverData.services[currentServiceIndex].color === 'green' ? 'bg-green-500 shadow-[0_0_8px_lime]' : serverData.services[currentServiceIndex].color === 'red' ? 'bg-red-500' : 'bg-yellow-500'}`}></span>
+                                                <span className="text-sm font-medium text-gray-200">{serverData.services[currentServiceIndex].name}</span>
+                                            </div>
+                                            <span className="text-xs font-mono text-white/50 uppercase">{serverData.services[currentServiceIndex].status}</span>
                                         </div>
-                                    </div>
-                                    <div>
-                                        <p className="text-gray-400 font-medium text-xs mb-0.5">{t('home.welcome')},</p>
-                                        <h2 className="text-xl font-bold text-white font-display tracking-wide truncate max-w-[150px]">{username || (email ? email.split('@')[0] : t('home.guest'))}</h2>
-                                    </div>
+                                    ) : (
+                                        <span className="text-xs text-gray-500 italic">{t('home.loading')}</span>
+                                    )}
                                 </div>
                             </div>
                         </div>
 
-                        {/* Main Content Grid */}
-                        <div className="grid grid-cols-1 gap-6 flex-1">
-                            {/* Hero / Season Card */}
-                            <div className="bg-[#151921] rounded-2xl overflow-hidden border border-white/5 relative group min-h-[400px]">
-                                <div className="absolute inset-0 bg-[url('https://cdn.leilos.qzz.io/public/media/images/logo/logo.png')] bg-cover bg-center transition-transform duration-700 group-hover:scale-105"></div>
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#0B0E14] via-[#0B0E14]/60 to-transparent"></div>
+                        {/* Main Hero Section */}
+                        <div className="flex-1 glass-panel rounded-3xl overflow-hidden relative group flex flex-col justify-end">
+                            {/* Dynamic Background */}
+                            <div className="absolute inset-0 bg-[url('https://cdn.leilos.qzz.io/public/media/images/logo/logo.png')] bg-cover bg-center opacity-60 transition-transform duration-[20s] ease-linear group-hover:scale-105"></div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/70 to-transparent"></div>
+                            <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-transparent to-transparent opacity-60"></div>
+                            
+                            {/* Content */}
+                            <div className="relative z-10 p-8 md:p-10 w-full max-w-4xl">
+                                <div className="flex items-center gap-3 mb-4 animate-fade-in-up delay-100">
+                                    <div className="px-3 py-1 rounded-full bg-gold-primary text-black text-[10px] font-black tracking-widest uppercase border border-gold-primary shadow-[0_0_15px_rgba(212,175,55,0.4)]">
+                                        {t('home.season')}
+                                    </div>
+                                    <div className="px-3 py-1 rounded-full glass-button text-white text-[10px] font-bold tracking-widest uppercase backdrop-blur-md">
+                                        {t('home.chapter')}
+                                    </div>
+                                </div>
                                 
-                                <div className="absolute bottom-0 left-0 p-8 w-full">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <span className="px-3 py-1 rounded-full bg-gold-primary text-bg-dark text-xs font-bold border border-gold-primary shadow-[0_0_10px_rgba(212,175,55,0.4)]">
-                                            {t('home.season')}
-                                        </span>
-                                        <span className="px-3 py-1 rounded-full bg-white/10 text-white text-xs font-bold backdrop-blur-md border border-white/10">
-                                            {t('home.chapter')}
-                                        </span>
-                                    </div>
-                                    <h2 className="text-5xl font-bold text-white mb-4 font-display drop-shadow-lg leading-tight">{t('home.heroTitle')}</h2>
-                                    <p className="text-gray-200 mb-8 max-w-xl text-sm leading-relaxed drop-shadow-md font-medium">
-                                        {t('home.heroDesc')}
-                                    </p>
-                                    <div className="flex items-center gap-4">
-                                        <LaunchButton />
-                                    </div>
+                                <h1 className="text-5xl md:text-6xl font-black text-white mb-4 font-display tracking-tight leading-none drop-shadow-2xl animate-fade-in-up delay-200">
+                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">{t('home.heroTitle')}</span>
+                                    <br />
+                                    <span className="text-gradient-gold">{t('home.heroSubtitle')}</span>
+                                </h1>
+                                
+                                <p className="text-gray-300 mb-8 max-w-lg text-sm leading-relaxed font-medium drop-shadow-md border-l-2 border-gold-primary pl-4 animate-fade-in-up delay-300">
+                                    {t('home.heroDesc')}
+                                </p>
+                                
+                                <div className="animate-fade-in-up delay-300">
+                                    <LaunchButton />
                                 </div>
                             </div>
                         </div>
@@ -359,63 +386,66 @@ const App: React.FC = () => {
 
             case 'settings':
                 return (
-                    <div className="max-w-4xl mx-auto pt-10 animate-fade-in p-6 h-full overflow-y-auto">
-                        <h2 className="text-3xl font-bold text-white mb-8 font-display">{t('settings.title')}</h2>
+                    <div key="settings" className="max-w-4xl mx-auto pt-4 animate-fade-in-up p-4 h-full overflow-y-auto custom-scrollbar">
+                        <div className="flex items-center gap-4 mb-8">
+                            <h2 className="text-3xl font-bold text-white font-display tracking-wide">{t('settings.title')}</h2>
+                            <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent"></div>
+                        </div>
                         
-                        <div className="grid grid-cols-1 gap-6">
+                        <div className="grid grid-cols-1 gap-6 pb-8">
                             {/* Language Configuration */}
-                            <div className="bg-[#151921] rounded-2xl p-8 border border-white/5 relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-gold-primary/5 rounded-full blur-3xl -mr-16 -mt-16 transition-opacity group-hover:opacity-75"></div>
+                            <div className="glass-panel rounded-2xl p-6 border border-white/5 relative overflow-hidden group hover:border-gold-primary/30 transition-all">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-gold-primary/5 rounded-full blur-3xl -mr-16 -mt-16 transition-opacity group-hover:opacity-100 opacity-50"></div>
                                 <div className="relative z-10">
                                     <div className="flex items-center gap-4 mb-6">
-                                        <div className="p-3 bg-purple-500/10 rounded-xl">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                                        <div className="p-3 bg-purple-500/10 rounded-xl border border-purple-500/20 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                                         </div>
                                         <div>
-                                            <h3 className="text-xl font-bold text-white">{t('settings.language')}</h3>
-                                            <p className="text-gray-400 text-sm">{t('settings.languageDesc')}</p>
+                                            <h3 className="text-lg font-bold text-white font-display tracking-wide">{t('settings.language')}</h3>
+                                            <p className="text-gray-400 text-xs font-medium">{t('settings.languageDesc')}</p>
                                         </div>
                                     </div>
                                     
-                                    <div className="flex gap-4">
+                                    <div className="flex gap-3">
                                         <button 
                                             onClick={() => setLanguage('es')}
-                                            className={`flex-1 py-4 rounded-xl font-bold transition-all border ${language === 'es' ? 'bg-gold-primary text-bg-dark border-gold-primary shadow-[0_0_20px_rgba(212,175,55,0.2)]' : 'bg-white/5 text-white border-white/10 hover:border-white/20'}`}
+                                            className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border font-display tracking-wider ${language === 'es' ? 'bg-gold-primary text-bg-dark border-gold-primary shadow-[0_0_15px_rgba(212,175,55,0.3)] transform scale-[1.02]' : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'}`}
                                         >
-                                            Español
+                                            ESPAÑOL
                                         </button>
                                         <button 
                                             onClick={() => setLanguage('en')}
-                                            className={`flex-1 py-4 rounded-xl font-bold transition-all border ${language === 'en' ? 'bg-gold-primary text-bg-dark border-gold-primary shadow-[0_0_20px_rgba(212,175,55,0.2)]' : 'bg-white/5 text-white border-white/10 hover:border-white/20'}`}
+                                            className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border font-display tracking-wider ${language === 'en' ? 'bg-gold-primary text-bg-dark border-gold-primary shadow-[0_0_15px_rgba(212,175,55,0.3)] transform scale-[1.02]' : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'}`}
                                         >
-                                            English
+                                            ENGLISH
                                         </button>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Game Path Configuration */}
-                            <div className="bg-[#151921] rounded-2xl p-8 border border-white/5 relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-gold-primary/5 rounded-full blur-3xl -mr-16 -mt-16 transition-opacity group-hover:opacity-75"></div>
+                            <div className="glass-panel rounded-2xl p-6 border border-white/5 relative overflow-hidden group hover:border-gold-primary/30 transition-all">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-gold-primary/5 rounded-full blur-3xl -mr-16 -mt-16 transition-opacity group-hover:opacity-100 opacity-50"></div>
                                 <div className="relative z-10">
                                     <div className="flex items-center gap-4 mb-6">
-                                        <div className="p-3 bg-blue-500/10 rounded-xl">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400"><path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"></path><polygon points="18 2 22 6 12 16 8 16 8 12 18 2"></polygon></svg>
+                                        <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.1)]">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"></path><polygon points="18 2 22 6 12 16 8 16 8 12 18 2"></polygon></svg>
                                         </div>
                                         <div>
-                                            <h3 className="text-xl font-bold text-white">{t('settings.gamePath')}</h3>
-                                            <p className="text-gray-400 text-sm">{t('settings.gamePathDesc')}</p>
+                                            <h3 className="text-lg font-bold text-white font-display tracking-wide">{t('settings.gamePath')}</h3>
+                                            <p className="text-gray-400 text-xs font-medium">{t('settings.gamePathDesc')}</p>
                                         </div>
                                     </div>
                                     
                                     <div className="flex flex-col md:flex-row gap-4 items-center">
-                                        <div className="w-full flex-1 bg-black/40 rounded-xl border border-white/10 px-4 py-4 flex items-center gap-3">
+                                        <div className="w-full flex-1 bg-black/40 rounded-xl border border-white/10 px-4 py-3.5 flex items-center gap-3 group-hover:border-white/20 transition-colors">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 shrink-0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                                            <span className="text-gray-300 font-mono text-sm truncate select-all">{fortnitePath || t('settings.notSelected')}</span>
+                                            <span className="text-gray-300 font-mono text-xs truncate select-all">{fortnitePath || t('settings.notSelected')}</span>
                                         </div>
                                         <button 
                                             onClick={handleSelectPath}
-                                            className="w-full md:w-auto bg-white/5 hover:bg-white/10 text-white px-8 py-4 rounded-xl font-bold text-sm transition-all border border-white/10 hover:border-white/20 hover:scale-[1.02] active:scale-95"
+                                            className="w-full md:w-auto bg-white/5 hover:bg-white/10 text-white px-6 py-3.5 rounded-xl font-bold text-xs transition-all border border-white/10 hover:border-white/30 font-display tracking-widest uppercase hover:shadow-lg active:scale-95 whitespace-nowrap"
                                         >
                                             {t('settings.changePath')}
                                         </button>
@@ -424,27 +454,35 @@ const App: React.FC = () => {
                             </div>
 
                             {/* About Section - Simplified & Clean */}
-                            <div className="bg-[#151921] rounded-2xl p-8 border border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden shadow-lg shadow-gold-primary/20">
-                                        <img src="https://cdn.leilos.qzz.io/public/media/images/logo/logo.jpg" alt="Leilos Logo" className="w-full h-full object-cover" />
+                            <div className="glass-panel rounded-2xl p-6 border border-white/5 flex flex-col md:flex-row items-center justify-between gap-6 hover:border-gold-primary/30 transition-all">
+                                <div className="flex items-center gap-5">
+                                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-lg shadow-gold-primary/10 border border-white/10 p-1 bg-gradient-to-br from-white/10 to-transparent">
+                                        <div className="w-full h-full rounded-xl overflow-hidden bg-black">
+                                            <img src="https://cdn.leilos.qzz.io/public/media/images/logo/logo.jpg" alt="Leilos Logo" className="w-full h-full object-cover opacity-90" />
+                                        </div>
                                     </div>
                                     <div>
-                                        <h3 className="text-lg font-bold text-white font-display">Leilos Launcher</h3>
-                                        <p className="text-gray-500 text-sm">{t('settings.version')} {appVersion} • <span className="text-gold-primary">{t('settings.stable')}</span></p>
+                                        <h3 className="text-lg font-bold text-white font-display tracking-wide">Leilos Launcher</h3>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/10 text-gray-300 border border-white/5">v{appVersion}</span>
+                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20 flex items-center gap-1">
+                                                <span className="w-1 h-1 rounded-full bg-green-400"></span>
+                                                {t('settings.stable')}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                                 
                                 <div className="flex gap-3">
-                                    <button onClick={() => openShell('https://discord.gg/rNtPqQyBwg')} className="p-3 bg-white/5 rounded-xl hover:bg-[#5865F2]/20 hover:text-[#5865F2] transition-all border border-white/5 hover:border-[#5865F2]/30 group cursor-pointer">
+                                    <button onClick={() => openShell('https://discord.gg/rNtPqQyBwg')} className="p-3 bg-white/5 rounded-xl hover:bg-[#5865F2] hover:text-white text-[#5865F2] transition-all border border-white/10 hover:border-[#5865F2] group cursor-pointer shadow-sm hover:shadow-[0_0_15px_rgba(88,101,242,0.4)]">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="transition-transform group-hover:scale-110">
                                             <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.419-2.1568 2.419zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.419-2.1568 2.419z"/>
                                         </svg>
                                     </button>
-                                    <button onClick={() => openShell('https://github.com/leilosFN')} className="p-3 bg-white/5 rounded-xl hover:bg-white/20 hover:text-white transition-all border border-white/5 hover:border-white/30 group cursor-pointer">
+                                    <button onClick={() => openShell('https://github.com/leilosFN')} className="p-3 bg-white/5 rounded-xl hover:bg-white hover:text-black text-white transition-all border border-white/10 hover:border-white group cursor-pointer shadow-sm hover:shadow-[0_0_15px_rgba(255,255,255,0.4)]">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:scale-110"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
                                     </button>
-                                    <button onClick={() => openShell('https://leilos.qzz.io')} className="p-3 bg-white/5 rounded-xl hover:bg-gold-primary/20 hover:text-gold-primary transition-all border border-white/5 hover:border-gold-primary/30 group cursor-pointer">
+                                    <button onClick={() => openShell('https://leilos.qzz.io')} className="p-3 bg-white/5 rounded-xl hover:bg-gold-primary hover:text-bg-dark text-gold-primary transition-all border border-white/10 hover:border-gold-primary group cursor-pointer shadow-sm hover:shadow-[0_0_15px_rgba(212,175,55,0.4)]">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:scale-110"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                                     </button>
                                 </div>
@@ -455,66 +493,51 @@ const App: React.FC = () => {
 
             case 'download':
                 return (
-                    <div className="max-w-5xl mx-auto pt-10 animate-fade-in p-6">
-                        <div className="helios-card overflow-hidden relative min-h-[500px] flex flex-col justify-center group">
-                            {/* Background Image & Gradient */}
-                            <div className="absolute inset-0 bg-[url('https://cdn.leilos.qzz.io/public/media/images/logo/logo.png')] bg-cover bg-center transition-transform duration-700 group-hover:scale-105"></div>
-                            <div className="absolute inset-0 bg-gradient-to-t from-[#0B0E14] via-[#0B0E14]/60 to-transparent"></div>
+                    <div key="download" className="flex flex-col h-full animate-fade-in-up p-4">
+                        <div className="flex-1 glass-panel rounded-3xl overflow-hidden relative group flex flex-col justify-end">
+                            {/* Dynamic Background */}
+                            <div className="absolute inset-0 bg-[url('https://cdn.leilos.qzz.io/public/media/images/logo/logo.png')] bg-cover bg-center opacity-60 transition-transform duration-[20s] ease-linear group-hover:scale-105"></div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/70 to-transparent"></div>
+                            <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-transparent to-transparent opacity-60"></div>
                             
                             {/* Content */}
-                            <div className="relative z-10 p-8 md:p-12 max-w-2xl">
-                                <div className="flex items-center justify-between mb-2">
-                                    <h2 className="text-5xl font-bold font-display text-white drop-shadow-lg">{t('download.title')}</h2>
-                                    <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-mono text-gray-400 border border-white/5 backdrop-blur-md">._.</span>
+                            <div className="relative z-10 p-8 md:p-10 w-full max-w-4xl">
+                                <div className="flex items-center gap-3 mb-4 animate-fade-in-up delay-100">
+                                    <div className="px-3 py-1 rounded-full bg-gold-primary text-black text-[10px] font-black tracking-widest uppercase border border-gold-primary shadow-[0_0_15px_rgba(212,175,55,0.4)]">
+                                        {t('download.season')}
+                                    </div>
+                                    <div className="px-3 py-1 rounded-full glass-button text-white text-[10px] font-bold tracking-widest uppercase backdrop-blur-md">
+                                        {t('download.chapter')}
+                                    </div>
                                 </div>
                                 
-                                <div className="flex items-center gap-3 mb-8">
-                                    <span className="text-gold-primary font-medium tracking-widest text-sm uppercase font-display drop-shadow-md">{t('download.chapter')}</span>
-                                    <span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
-                                    <span className="text-gray-300 font-medium tracking-widest text-sm uppercase font-display drop-shadow-md">{t('download.season')}</span>
-                                </div>
+                                <h1 className="text-5xl md:text-6xl font-black text-white mb-4 font-display tracking-tight leading-none drop-shadow-2xl animate-fade-in-up delay-200">
+                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">{t('download.heroTitle')}</span>
+                                    <br />
+                                    <span className="text-gradient-gold">{t('download.heroSubtitle')}</span>
+                                </h1>
                                 
-                                <div className="mb-10 p-6 bg-black/40 rounded-2xl border border-white/5 backdrop-blur-sm shadow-xl">
-                                    <p className="text-gray-200 text-sm leading-relaxed font-medium">
-                                        {t('download.desc')}
-                                    </p>
-                                </div>
+                                <p className="text-gray-300 mb-8 max-w-lg text-sm leading-relaxed font-medium drop-shadow-md border-l-2 border-gold-primary pl-4 animate-fade-in-up delay-300">
+                                    {t('download.desc')}
+                                </p>
                                 
-                                <div className="flex gap-4 mb-8">
+                                <div className="animate-fade-in-up delay-300">
                                     <button 
                                         onClick={handleStartDownload}
-                                        disabled={downloadProgress?.state === 'downloading' || downloadProgress?.state === 'extracting'}
-                                        className="w-full md:w-auto bg-gold-primary text-bg-dark px-10 py-4 rounded-xl font-bold hover:bg-gold-highlight transition-all duration-300 font-display tracking-widest disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(212,175,55,0.3)] hover:shadow-[0_0_30px_rgba(212,175,55,0.5)] transform hover:-translate-y-1 border border-gold-primary/20 min-w-[240px]"
+                                        className="relative px-10 py-4 font-black text-lg transition-all duration-300 transform font-display tracking-[0.2em] uppercase overflow-hidden group bg-gradient-to-r from-gold-primary to-gold-secondary text-bg-dark hover:shadow-[0_0_50px_rgba(212,175,55,0.4)] hover:scale-105 active:scale-95"
+                                        style={{ clipPath: "polygon(10% 0, 100% 0, 90% 100%, 0% 100%)" }}
                                     >
-                                        {downloadProgress?.state === 'downloading' ? t('download.downloading') : 
-                                         downloadProgress?.state === 'extracting' ? t('download.extracting') : t('download.install')}
+                                        {/* Shine effect overlay */}
+                                        <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent z-10"></div>
+                                        
+                                        <div className="relative z-20 flex items-center gap-3">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                            </svg>
+                                            <span>{t('download.install')}</span>
+                                        </div>
                                     </button>
                                 </div>
-
-                                {downloadProgress && (
-                                    <div className="bg-black/60 p-5 rounded-2xl border border-white/10 backdrop-blur-md shadow-2xl">
-                                        <div className="flex justify-between mb-3 text-sm font-display tracking-wide">
-                                            <span className="capitalize text-gray-300 flex items-center gap-2">
-                                                {downloadProgress.state === 'downloading' && <span className="animate-pulse text-gold-primary">●</span>}
-                                                {downloadProgress.state}
-                                            </span>
-                                            <span className="text-gold-primary font-bold">{downloadProgress.percent}%</span>
-                                        </div>
-                                        <div className="w-full bg-black/50 h-3 rounded-full overflow-hidden border border-white/5">
-                                            <div 
-                                                className="bg-gradient-to-r from-gold-primary to-gold-highlight h-full transition-all duration-300 shadow-[0_0_15px_rgba(212,175,55,0.5)] relative" 
-                                                style={{ width: `${downloadProgress.percent}%` }}
-                                            >
-                                                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
-                                            </div>
-                                        </div>
-                                        <div className="mt-3 text-xs text-gray-400 text-right font-mono flex justify-end gap-2">
-                                            <span>{(downloadProgress.downloaded / 1024 / 1024).toFixed(2)} {t('download.mb')}</span>
-                                            <span className="text-gray-600">/</span>
-                                            <span>{(downloadProgress.total / 1024 / 1024).toFixed(2)} {t('download.mb')}</span>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         </div>
                     </div>
