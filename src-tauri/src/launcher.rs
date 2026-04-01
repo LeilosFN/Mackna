@@ -1,4 +1,4 @@
-use tauri::{Window, Manager};
+use tauri::Window;
 use std::path::PathBuf;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -13,7 +13,6 @@ use winapi::um::synchapi::WaitForSingleObject;
 use winapi::um::handleapi::CloseHandle;
 use winapi::um::winbase::INFINITE;
 use winapi::um::winnt::SYNCHRONIZE;
-use std::os::windows::process::CommandExt;
 
 fn log_to_file(message: &str) {
     println!("{}", message);
@@ -386,7 +385,7 @@ pub async fn launch(
 }
 
 #[tauri::command]
-pub async fn kill_fortnite_processes(window: Window) -> Result<bool, String> {
+pub async fn kill_fortnite_processes(_window: Window) -> Result<bool, String> {
     let processes_to_kill = [
         "FortniteClient-Win64-Shipping_BE.exe",
         "FortniteClient-Win64-Shipping_EAC.exe",

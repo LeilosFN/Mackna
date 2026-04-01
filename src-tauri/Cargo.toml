@@ -29,6 +29,7 @@ widestring = "1.0"
 sysinfo = "0.29"
 discord-rich-presence = "0.2.4"
 open = "5.0"
+tiny_http = "0.12"
 
 [features]
 # by default Tauri runs in production mode
