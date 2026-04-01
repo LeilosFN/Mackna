@@ -7,6 +7,7 @@ const translations = {
             subtitle: 'Bienvenido a Leilos',
             email: 'Ingresa tu ID de Leilos',
             button: 'Entrar',
+            discord: 'INICIAR SESIÓN CON DISCORD',
             register: 'REGÍSTRATE O ACCEDE A TU CUENTA',
             footer: 'Leilos • Crisutf',
             error: 'Por favor ingresa tu ID de Leilos',
@@ -81,6 +82,7 @@ const translations = {
             subtitle: 'Welcome to Leilos',
             email: 'Enter your Leilos ID',
             button: 'Login',
+            discord: 'LOGIN WITH DISCORD',
             register: 'REGISTER OR ACCESS YOUR ACCOUNT',
             footer: 'Leilos • Crisutf',
             error: 'Please enter your Leilos ID'

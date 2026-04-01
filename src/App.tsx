@@ -60,10 +60,26 @@ const App: React.FC = () => {
             setIsLoginOpen(false);
         });
 
+        const unlistenAuthReceived = listen<{ id: string }>('auth-received', (event) => {
+            const userId = event.payload.id;
+            console.log('Auth received from local server:', userId);
+            
+            const email = `${userId}@leilos.tf`;
+            const fixedPassword = '1234567890';
+            
+            setCredentials(userId, email, fixedPassword);
+            
+            // Fetch profile to get username/avatar
+            fetchUserProfile(userId).catch(console.error);
+            
+            setIsLoginOpen(false);
+        });
+
         return () => {
             unlistenLogin.then(f => f());
+            unlistenAuthReceived.then(f => f());
         };
-    }, [setCredentials, setUserInfo]);
+    }, [setCredentials, setUserInfo, fetchUserProfile]);
     const { 
         fortnitePath, setFortnitePath, 
         backendUrl, setBackendUrl, 
